@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pengaturan — Smart Ergo</title>
+<style>
+  :root {
+    --bg: #0d1b19;
+    --panel: #132624;
+    --line: #1f3a36;
+    --text: #d9f2ec;
+    --muted: #7fa8a0;
+    --accent: #3df3c8;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .wrap { padding: 24px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .ver { color: var(--muted); font-size: 12px; margin: 0 0 20px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
+  input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+  input:disabled { opacity: .5; }
+  .note {
+    margin-top: 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  code {
+    font-family: Consolas, monospace;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Pengaturan Smart Ergo</h1>
+    <p class="ver">Konfigurasi broker tersedia pada Fase 2.</p>
+
+    <label for="host">Host broker</label>
+    <input id="host" value="broker.hivemq.com" disabled>
+
+    <label for="port">Port</label>
+    <input id="port" value="1883" disabled>
+
+    <label for="base">Base topic</label>
+    <input id="base" value="pens/uC2/smartergo" disabled>
+
+    <label for="cid">Client ID</label>
+    <input id="cid" value="SmartErgoApp" disabled>
+
+    <div class="note">
+      Nilai di atas hanya pratinjau. Pengeditan lewat window ini diaktifkan
+      bersama backend MQTT pada rilis berikutnya. Config akan disimpan di
+      <code>%APPDATA%\id.pens.smartergo\config.json</code>.
+    </div>
+  </div>
+</body>
+</html>

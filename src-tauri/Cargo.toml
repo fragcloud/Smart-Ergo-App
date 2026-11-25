@@ -1,0 +1,13 @@
+[package]
+name = "smart-ergo"
+version = "0.1.0"
+description = "Smart Ergo — GUI kendali & telemetri (Kelompok 2, Workshop Mikrokontroler Lanjut, PENS)"
+authors = ["Kelompok 2 PENS"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2"
