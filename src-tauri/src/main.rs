@@ -54,16 +54,16 @@ fn main() {
                 }
             }
 
-            let open_dashboard = MenuItemBuilder::with_id("open_dashboard", "Buka Dashboard").build(app)?;
-            let open_settings = MenuItemBuilder::with_id("open_settings", "Pengaturan").build(app)?;
-            let ui_alarm = MenuItemBuilder::with_id("ui_alarm", "Uji Alarm").build(app)?;
-            let status = MenuItemBuilder::with_id("status", "Status: app berjalan")
+            let item_dashboard = MenuItemBuilder::with_id("open_dashboard", "Buka Dashboard").build(app)?;
+            let item_settings = MenuItemBuilder::with_id("open_settings", "Pengaturan").build(app)?;
+            let item_alarm = MenuItemBuilder::with_id("ui_alarm", "Uji Alarm").build(app)?;
+            let item_status = MenuItemBuilder::with_id("status", "Status: app berjalan")
                 .enabled(false)
                 .build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Keluar").build(app)?;
+            let item_quit = MenuItemBuilder::with_id("quit", "Keluar").build(app)?;
 
             let menu = MenuBuilder::new(app)
-                .items(&[&open_dashboard, &open_settings, &ui_alarm, &status, &quit])
+                .items(&[&item_dashboard, &item_settings, &item_alarm, &item_status, &item_quit])
                 .build()?;
 
             let default_icon = app
