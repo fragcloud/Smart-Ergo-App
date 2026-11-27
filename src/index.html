@@ -13,6 +13,8 @@
     --text: #d9f2ec;
     --muted: #7fa8a0;
     --accent: #3df3c8;
+    --warn: #f5b942;
+    --err: #ff7b72;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -26,7 +28,7 @@
     justify-content: center;
   }
   .card {
-    max-width: 560px;
+    max-width: 640px;
     width: calc(100% - 48px);
     background: var(--panel);
     border: 1px solid var(--line);
@@ -45,7 +47,83 @@
   }
   h1 { margin: 16px 0 4px; font-size: 28px; font-weight: 650; }
   .ver { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
-  ul { padding-left: 18px; color: var(--muted); line-height: 1.7; }
+  .mqtt-box {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .mqtt-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .pill[data-state="connected"] { color: var(--accent); border-color: rgba(61, 243, 200, .35); }
+  .pill[data-state="connected"]::before { background: var(--accent); }
+  .pill[data-state="connecting"],
+  .pill[data-state="reconnecting"] { color: var(--warn); border-color: rgba(245, 185, 66, .35); }
+  .pill[data-state="connecting"]::before,
+  .pill[data-state="reconnecting"]::before { background: var(--warn); }
+  .pill[data-state="error"] { color: var(--err); border-color: rgba(255, 123, 114, .35); }
+  .pill[data-state="error"]::before { background: var(--err); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .stat {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--panel);
+  }
+  .stat-k { font-size: 11px; color: var(--muted); margin: 0 0 4px; }
+  .stat-v { font-size: 16px; font-weight: 650; font-family: Consolas, monospace; margin: 0; }
+  .meta {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: Consolas, monospace;
+    word-break: break-all;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  ul { padding-left: 18px; color: var(--muted); line-height: 1.7; margin: 0; }
   code {
     font-family: Consolas, monospace;
     color: var(--accent);
@@ -54,7 +132,7 @@
     border-radius: 6px;
   }
   footer {
-    margin-top: 24px;
+    margin-top: 22px;
     padding-top: 16px;
     border-top: 1px solid var(--line);
     color: var(--muted);
@@ -64,17 +142,91 @@
 </head>
 <body>
   <main class="card">
-    <span class="badge">Fase 1 · kerangka aplikasi</span>
+    <span class="badge">Fase 2 · backend MQTT &amp; pengaturan</span>
     <h1>Smart Ergo</h1>
-    <p class="ver">versi 0.1.0 · Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS</p>
+    <p class="ver">versi 0.2.0 · Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS</p>
+
+    <section class="mqtt-box" aria-label="Status MQTT latar">
+      <div class="mqtt-top">
+        <span class="pill" id="brokerPill" data-state="connecting">Broker: menghubungkan…</span>
+        <span class="pill" id="nodesPill">Vital: menunggu · Ergo: menunggu</span>
+      </div>
+      <div class="grid">
+        <div class="stat"><p class="stat-k">Paket /vital</p><p class="stat-v" id="cntVital">0</p></div>
+        <div class="stat"><p class="stat-k">Paket /ergo</p><p class="stat-v" id="cntErgo">0</p></div>
+        <div class="stat"><p class="stat-k">Paket /ack</p><p class="stat-v" id="cntAck">0</p></div>
+      </div>
+      <div class="meta" id="metaLine">broker.hivemq.com:1883 · pens/uC2/smartergo</div>
+      <div class="actions">
+        <button type="button" id="btnSettings">Pengaturan Broker</button>
+        <button type="button" id="btnReconnect">Sambung Ulang</button>
+      </div>
+    </section>
+
     <ul>
-      <li>Aplikasi berjalan di latar dengan <code>tray icon</code>.</li>
-      <li>Menutup dashboard hanya menyembunyikannya; proses tetap hidup.</li>
-      <li>Kembali ke dashboard dari tray → <code>Buka Dashboard</code>.</li>
-      <li>Menghentikan aplikasi hanya dari tray → <code>Keluar</code>.</li>
-      <li>Dashboard lengkap (monitoring + kendali MQTT) dipasang pada Fase 3.</li>
+      <li>Worker MQTT berjalan di latar (<code>rumqttc</code>) dan tetap hidup saat window ditutup.</li>
+      <li>Konfigurasi broker disimpan di <code>%APPDATA%\id.pens.smartergo\config.json</code>.</li>
+      <li>Dashboard lengkap (grafik, kendali, log) dipasang pada Fase 3.</li>
     </ul>
     <footer>Smart Ergo · id.pens.smartergo</footer>
   </main>
+
+<script>
+'use strict';
+
+const tauri = window.__TAURI__;
+const invoke = tauri?.core?.invoke;
+const listen = tauri?.event?.listen;
+const $ = (id) => document.getElementById(id);
+
+const counts = { vital: 0, ergo: 0, ack: 0 };
+
+function paintStatus(snap) {
+  const bp = $('brokerPill');
+  bp.dataset.state = snap.state || 'connecting';
+  const labels = {
+    connected: 'Broker: terhubung',
+    connecting: 'Broker: menghubungkan…',
+    reconnecting: 'Broker: menyambung ulang…',
+    error: 'Broker: terputus',
+  };
+  bp.textContent = labels[snap.state] || ('Broker: ' + snap.state);
+
+  const np = $('nodesPill');
+  np.dataset.state = (snap.vital_online && snap.ergo_online) ? 'connected'
+    : (snap.vital_online || snap.ergo_online) ? 'connecting' : '';
+  np.textContent = `Vital: ${snap.vital_online ? 'aktif' : 'menunggu'} · Ergo: ${snap.ergo_online ? 'aktif' : 'menunggu'}`;
+
+  counts.vital = snap.vital_count || 0;
+  counts.ergo = snap.ergo_count || 0;
+  counts.ack = snap.ack_count || 0;
+  $('cntVital').textContent = counts.vital;
+  $('cntErgo').textContent = counts.ergo;
+  $('cntAck').textContent = counts.ack;
+  $('metaLine').textContent = `${snap.host}:${snap.port} · ${snap.base_topic} · ${snap.client_id}`;
+}
+
+async function init() {
+  if (!invoke) return;
+  try {
+    paintStatus(await invoke('get_mqtt_status'));
+  } catch (e) {}
+
+  if (listen) {
+    await listen('mqtt-status', (ev) => paintStatus(ev.payload));
+    await listen('mqtt-message', (ev) => {
+      const k = ev.payload?.kind;
+      if (k === 'vital') $('cntVital').textContent = ++counts.vital;
+      else if (k === 'ergo') $('cntErgo').textContent = ++counts.ergo;
+      else if (k === 'ack') $('cntAck').textContent = ++counts.ack;
+    });
+  }
+}
+
+$('btnSettings').addEventListener('click', () => invoke && invoke('open_settings_window'));
+$('btnReconnect').addEventListener('click', () => invoke && invoke('reconnect_mqtt'));
+
+init();
+</script>
 </body>
 </html>

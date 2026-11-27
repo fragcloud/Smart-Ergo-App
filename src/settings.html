@@ -13,6 +13,9 @@
     --text: #d9f2ec;
     --muted: #7fa8a0;
     --accent: #3df3c8;
+    --ok: #3df3c8;
+    --warn: #f5b942;
+    --err: #ff7b72;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -22,22 +25,98 @@
     background: var(--bg);
     color: var(--text);
   }
-  .wrap { padding: 24px; }
+  .wrap { padding: 24px; max-width: 520px; margin: 0 auto; }
+  .head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
   h1 { font-size: 18px; margin: 0 0 4px; }
-  .ver { color: var(--muted); font-size: 12px; margin: 0 0 20px; }
+  .ver { color: var(--muted); font-size: 12px; margin: 0; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .pill[data-state="connected"] { color: var(--ok); border-color: rgba(61, 243, 200, .35); }
+  .pill[data-state="connected"]::before { background: var(--ok); }
+  .pill[data-state="connecting"],
+  .pill[data-state="reconnecting"] { color: var(--warn); border-color: rgba(245, 185, 66, .35); }
+  .pill[data-state="connecting"]::before,
+  .pill[data-state="reconnecting"]::before { background: var(--warn); }
+  .pill[data-state="error"] { color: var(--err); border-color: rgba(255, 123, 114, .35); }
+  .pill[data-state="error"]::before { background: var(--err); }
+
   label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
   input {
     width: 100%;
-    background: var(--bg);
+    background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 8px;
     color: var(--text);
     padding: 9px 12px;
     font-size: 13px;
+    font-family: Consolas, "Segoe UI", monospace;
   }
-  input:disabled { opacity: .5; }
-  .note {
+  input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-top: 20px;
+  }
+  button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary {
+    background: rgba(61, 243, 200, .14);
+    border-color: rgba(61, 243, 200, .45);
+    color: var(--accent);
+  }
+  .msg {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--muted);
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg[data-kind="ok"] { color: var(--ok); border-color: rgba(61, 243, 200, .35); }
+  .msg[data-kind="err"] { color: var(--err); border-color: rgba(255, 123, 114, .35); }
+  .note {
+    margin-top: 18px;
     padding: 12px 14px;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -53,26 +132,162 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Pengaturan Smart Ergo</h1>
-    <p class="ver">Konfigurasi broker tersedia pada Fase 2.</p>
+    <div class="head">
+      <div>
+        <h1>Pengaturan Smart Ergo</h1>
+        <p class="ver">Konfigurasi broker MQTT (TCP polos, tanpa TLS)</p>
+      </div>
+      <span class="pill" id="brokerPill" data-state="connecting">Menghubungkan…</span>
+    </div>
 
-    <label for="host">Host broker</label>
-    <input id="host" value="broker.hivemq.com" disabled>
+    <form id="cfgForm">
+      <label for="host">Host broker</label>
+      <input id="host" type="text" spellcheck="false" autocomplete="off" required>
 
-    <label for="port">Port</label>
-    <input id="port" value="1883" disabled>
+      <label for="port">Port TCP</label>
+      <input id="port" type="number" min="1" max="65535" step="1" required>
 
-    <label for="base">Base topic</label>
-    <input id="base" value="pens/uC2/smartergo" disabled>
+      <label for="base">Base topic</label>
+      <input id="base" type="text" spellcheck="false" autocomplete="off" required>
 
-    <label for="cid">Client ID</label>
-    <input id="cid" value="SmartErgoApp" disabled>
+      <label for="cid">Client ID</label>
+      <input id="cid" type="text" maxlength="64" spellcheck="false" autocomplete="off" required>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="btnSave">Simpan &amp; Sambungkan</button>
+        <button type="button" id="btnReconnect">Sambung Ulang</button>
+        <button type="button" id="btnReset">Reset Default</button>
+      </div>
+    </form>
+
+    <div class="msg" id="msgBox" role="status" aria-live="polite"></div>
 
     <div class="note">
-      Nilai di atas hanya pratinjau. Pengeditan lewat window ini diaktifkan
-      bersama backend MQTT pada rilis berikutnya. Config akan disimpan di
-      <code>%APPDATA%\id.pens.smartergo\config.json</code>.
+      Perubahan langsung disimpan ke <code>%APPDATA%\id.pens.smartergo\config.json</code>
+      dan menyambungkan ulang worker MQTT di latar tanpa perlu restart aplikasi.
     </div>
   </div>
+
+<script>
+'use strict';
+
+const tauri = window.__TAURI__;
+const invoke = tauri?.core?.invoke;
+const listen = tauri?.event?.listen;
+
+const $ = (id) => document.getElementById(id);
+
+function showMsg(kind, text) {
+  const box = $('msgBox');
+  box.dataset.kind = kind;
+  box.textContent = text;
+  box.classList.add('show');
+}
+
+function fillForm(cfg) {
+  $('host').value = cfg.broker_host || '';
+  $('port').value = cfg.broker_port || 1883;
+  $('base').value = cfg.base_topic || '';
+  $('cid').value = cfg.client_id || '';
+}
+
+function paintStatus(snap) {
+  const pill = $('brokerPill');
+  pill.dataset.state = snap.state || 'connecting';
+  const labels = {
+    connected: 'Terhubung',
+    connecting: 'Menghubungkan…',
+    reconnecting: 'Menyambung ulang…',
+    error: 'Terputus',
+  };
+  pill.textContent = labels[snap.state] || snap.state;
+  if (snap.state === 'error' && snap.error) {
+    showMsg('err', 'Koneksi broker gagal: ' + snap.error);
+  }
+}
+
+function setBusy(busy) {
+  $('btnSave').disabled = busy;
+  $('btnReconnect').disabled = busy;
+  $('btnReset').disabled = busy;
+}
+
+async function init() {
+  if (!invoke) {
+    showMsg('err', 'API Tauri tidak tersedia di konteks ini.');
+    return;
+  }
+  try {
+    const [cfg, snap] = await Promise.all([
+      invoke('get_config'),
+      invoke('get_mqtt_status'),
+    ]);
+    fillForm(cfg);
+    paintStatus(snap);
+  } catch (e) {
+    showMsg('err', String(e));
+  }
+
+  if (listen) {
+    await listen('mqtt-status', (ev) => paintStatus(ev.payload));
+  }
+}
+
+$('cfgForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!invoke) return;
+  const port = parseInt($('port').value, 10);
+  if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    showMsg('err', 'Port harus bilangan bulat antara 1 sampai 65535.');
+    return;
+  }
+  setBusy(true);
+  try {
+    const saved = await invoke('save_config', {
+      cfg: {
+        broker_host: $('host').value,
+        broker_port: port,
+        base_topic: $('base').value,
+        client_id: $('cid').value,
+      },
+    });
+    fillForm(saved);
+    showMsg('ok', `Tersimpan (${saved.broker_host}:${saved.broker_port}). Menyambungkan ulang…`);
+  } catch (err) {
+    showMsg('err', String(err));
+  } finally {
+    setBusy(false);
+  }
+});
+
+$('btnReconnect').addEventListener('click', async () => {
+  if (!invoke) return;
+  setBusy(true);
+  try {
+    await invoke('reconnect_mqtt');
+    showMsg('ok', 'Memicu sambung ulang ke broker…');
+  } catch (err) {
+    showMsg('err', String(err));
+  } finally {
+    setBusy(false);
+  }
+});
+
+$('btnReset').addEventListener('click', async () => {
+  if (!invoke) return;
+  setBusy(true);
+  try {
+    const saved = await invoke('reset_config');
+    fillForm(saved);
+    showMsg('ok', 'Konfigurasi dikembalikan ke default dan disambungkan ulang.');
+  } catch (err) {
+    showMsg('err', String(err));
+  } finally {
+    setBusy(false);
+  }
+});
+
+init();
+</script>
 </body>
 </html>

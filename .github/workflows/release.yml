@@ -50,13 +50,12 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
             checksums.txt
           body: |
-            ## Smart Ergo 0.1.0 — Fase 1 (kerangka aplikasi desktop)
+            ## Smart Ergo 0.2.0 — Fase 2 (backend MQTT & pengaturan)
 
-            - Installer Windows x64, per-user, tanpa hak admin
-            - WebView2 diunduh otomatis saat instalasi
-            - Aplikasi berjalan di latar dengan tray icon
-            - Dashboard: buka/tutup tanpa mematikan aplikasi
-            - Keluar hanya dari menu tray
+            - Backend MQTT latar (`rumqttc`, TCP polos port 1883) tetap hidup saat dashboard ditutup
+            - Persistensi konfigurasi di `%APPDATA%\id.pens.smartergo\config.json`
+            - Window Pengaturan aktif (edit host, port, base topic, client ID + validasi)
+            - Status tray dinamis mengikuti koneksi broker dan keaktifan node Vital/Ergo
 
             **Integritas:** installer unsigned (normal untuk proyek akademik).
             Verifikasi file dengan hash SHA-256 pada `checksums.txt`.
