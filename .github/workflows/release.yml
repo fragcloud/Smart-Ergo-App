@@ -50,12 +50,12 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
             checksums.txt
           body: |
-            ## Smart Ergo 0.2.0 — Fase 2 (backend MQTT & pengaturan)
+            ## Smart Ergo 0.3.0 — Fase 3 (dashboard lengkap offline-safe)
 
-            - Backend MQTT latar (`rumqttc`, TCP polos port 1883) tetap hidup saat dashboard ditutup
-            - Persistensi konfigurasi di `%APPDATA%\id.pens.smartergo\config.json`
-            - Window Pengaturan aktif (edit host, port, base topic, client ID + validasi)
-            - Status tray dinamis mengikuti koneksi broker dan keaktifan node Vital/Ergo
+            - Port penuh dashboard kendali & telemetri ke aplikasi desktop (Chart.js & font lokal, tanpa CDN)
+            - Terhubung langsung ke backend MQTT Rust (`rumqttc`) lewat Tauri IPC
+            - Deteksi otomatis perangkat virtual (`Virtual_`) vs perangkat fisik pada indikator topbar
+            - Sinkronisasi status LED/Buzzer dari telemetri `/ergo` dan jejak ACK real-time
 
             **Integritas:** installer unsigned (normal untuk proyek akademik).
             Verifikasi file dengan hash SHA-256 pada `checksums.txt`.

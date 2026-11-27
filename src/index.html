@@ -1,175 +1,626 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<title>Smart Ergo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<script>
+try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem('se-scheme')??'light dark';}catch(e){}
+</script>
+<title>Smart Ergo — Kendali &amp; Telemetri</title>
+<meta name="description" content="Dashboard kendali dan telemetri Smart Ergo: dua ESP32 via MQTT, monitor BPM, SpO2, postur, dan jarak.">
+
+<link rel="stylesheet" href="vendor/fonts.css">
+<script src="vendor/chart.umd.min.js"></script>
+
 <style>
-  :root {
-    --bg: #0d1b19;
-    --panel: #132624;
-    --line: #1f3a36;
-    --text: #d9f2ec;
-    --muted: #7fa8a0;
-    --accent: #3df3c8;
-    --warn: #f5b942;
-    --err: #ff7b72;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0;
-    font-family: "Segoe UI", system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .card {
-    max-width: 640px;
-    width: calc(100% - 48px);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 32px;
-  }
-  .badge {
-    display: inline-block;
-    font-size: 12px;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
-    border-radius: 999px;
-    padding: 4px 12px;
-  }
-  h1 { margin: 16px 0 4px; font-size: 28px; font-weight: 650; }
-  .ver { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
-  .mqtt-box {
-    border: 1px solid var(--line);
-    background: var(--bg);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 18px;
-  }
-  .mqtt-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    color: var(--muted);
-  }
-  .pill::before {
-    content: "";
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .pill[data-state="connected"] { color: var(--accent); border-color: rgba(61, 243, 200, .35); }
-  .pill[data-state="connected"]::before { background: var(--accent); }
-  .pill[data-state="connecting"],
-  .pill[data-state="reconnecting"] { color: var(--warn); border-color: rgba(245, 185, 66, .35); }
-  .pill[data-state="connecting"]::before,
-  .pill[data-state="reconnecting"]::before { background: var(--warn); }
-  .pill[data-state="error"] { color: var(--err); border-color: rgba(255, 123, 114, .35); }
-  .pill[data-state="error"]::before { background: var(--err); }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 14px;
-  }
-  .stat {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 10px 12px;
-    background: var(--panel);
-  }
-  .stat-k { font-size: 11px; color: var(--muted); margin: 0 0 4px; }
-  .stat-v { font-size: 16px; font-weight: 650; font-family: Consolas, monospace; margin: 0; }
-  .meta {
-    margin-top: 12px;
-    font-size: 12px;
-    color: var(--muted);
-    font-family: Consolas, monospace;
-    word-break: break-all;
-  }
-  .actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 14px;
-  }
-  button {
-    border: 1px solid var(--line);
-    background: var(--panel);
-    color: var(--text);
-    border-radius: 8px;
-    padding: 7px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--muted); }
-  ul { padding-left: 18px; color: var(--muted); line-height: 1.7; margin: 0; }
-  code {
-    font-family: Consolas, monospace;
-    color: var(--accent);
-    background: rgba(61, 243, 200, .08);
-    padding: 1px 6px;
-    border-radius: 6px;
-  }
-  footer {
-    margin-top: 22px;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 12px;
-  }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  color-scheme:light dark;
+
+  /* Petakan <meta name="color-scheme"> balik ke properti, agar override tombol tema berlaku. */
+  &:has(> head > meta[name="color-scheme"][content="dark"]){color-scheme:dark}
+  &:has(> head > meta[name="color-scheme"][content="light"]){color-scheme:light}
+
+  --bg:        light-dark(#f2f0ea, #101315);
+  --surface:   light-dark(#fffefb, #181c1f);
+  --surface-2: light-dark(#f7f5f0, #1e2327);
+  --line:      light-dark(#dcd8cd, #2b3136);
+  --line-2:    light-dark(#c4bfb1, #3c444a);
+  --ink:       light-dark(#14181d, #eef2f4);
+  --ink-2:     light-dark(#5b6570, #9aa5ad);
+  --ink-3:     light-dark(#5f6972, #8c97a0);
+
+  --accent:      light-dark(#0d6b5f, #4fd1bd);
+  --accent-bg:   light-dark(#e2f1ee, #10322e);
+  --accent-line: light-dark(#9ccdc4, #1f5a52);
+
+  --ok:      light-dark(#17703f, #58d68d);
+  --ok-bg:   light-dark(#e6f3ec, #12301e);
+  --ok-line: light-dark(#9fcdb3, #1f5235);
+
+  --warn:      light-dark(#8a5300, #f2b544);
+  --warn-bg:   light-dark(#fdf1dc, #33260c);
+  --warn-line: light-dark(#e2c086, #5c4718);
+
+  --alarm:      light-dark(#b02a2a, #ff7b72);
+  --alarm-bg:   light-dark(#fce9e7, #3a1715);
+  --alarm-line: light-dark(#e3a3a0, #6b2d28);
+
+  --ch-bpm:   light-dark(#c92a5e, #ff7fa8);
+  --ch-spo2:  light-dark(#1565a8, #63b3f2);
+  --ch-accel: light-dark(#2b7a41, #6cd98b);
+  --ch-jarak: light-dark(#a4650a, #f0b357);
+
+  --r:  12px;
+  --r-s: 8px;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --shadow: 0 1px 2px light-dark(rgba(20,24,29,.05), rgba(0,0,0,.4)), 0 8px 24px -16px light-dark(rgba(20,24,29,.16), rgba(0,0,0,.7));
+}
+
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font);
+  font-size:15px;
+  line-height:1.5;
+  background:var(--bg);
+  color:var(--ink);
+  min-block-size:100vh;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:color-mix(in oklab, var(--accent) 26%, transparent);color:var(--ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- shell ---------- */
+.shell{max-inline-size:1440px;margin-inline:auto;padding:0 24px 56px}
+
+.topbar{
+  position:sticky;inset-block-start:0;z-index:50;
+  background:color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter:blur(12px) saturate(1.4);
+  border-block-end:1px solid var(--line);
+}
+.topbar-in{
+  max-inline-size:1440px;margin-inline:auto;padding:0 24px;
+  display:flex;align-items:center;gap:12px;min-block-size:60px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:11px;margin-inline-end:auto}
+.brand-txt{display:flex;flex-direction:column;line-height:1.25}
+.brand-mark{
+  inline-size:34px;block-size:34px;border-radius:9px;
+  background:var(--accent);color:light-dark(#fff,#04211e);
+  display:grid;place-items:center;flex:none;
+}
+.brand-mark svg{inline-size:20px;block-size:20px}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.brand-sub{font-size:11.5px;font-weight:500;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase}
+
+.ico{inline-size:16px;block-size:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- status pills ---------- */
+.sig{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:5px 11px 5px 9px;border-radius:100px;
+  border:1px solid var(--line);background:var(--surface);
+  font-size:12px;font-weight:500;color:var(--ink-2);white-space:nowrap;
+}
+.sig::before{
+  content:"";inline-size:7px;block-size:7px;border-radius:50%;
+  background:var(--ink-3);flex:none;
+}
+.sig[data-state="ok"]{border-color:var(--ok-line);background:var(--ok-bg);color:var(--ok)}
+.sig[data-state="ok"]::before{background:var(--ok)}
+.sig[data-state="warn"]{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn)}
+.sig[data-state="warn"]::before{background:var(--warn)}
+.sig[data-state="err"]{border-color:var(--alarm-line);background:var(--alarm-bg);color:var(--alarm)}
+.sig[data-state="err"]::before{background:var(--alarm)}
+.sig[data-state="sim"]{border-color:var(--accent-line);background:var(--accent-bg);color:var(--accent)}
+.sig[data-state="sim"]::before{background:var(--accent)}
+@media (prefers-reduced-motion:no-preference){
+  .sig[data-pulse="on"]::before{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.25;transform:scale(.75)}}
+}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-block-size:36px;padding:0 13px;border-radius:var(--r-s);
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink);
+  font:500 13px/1 var(--font);cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.btn:hover{background:var(--surface-2);border-color:var(--ink-3)}
+.btn[data-variant="go"]{border-color:var(--accent-line);background:var(--accent-bg);color:var(--accent)}
+.btn[data-variant="warn"]{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn)}
+.btn[data-variant="stop"]{border-color:var(--alarm-line);background:var(--alarm-bg);color:var(--alarm)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon-btn{
+  inline-size:36px;block-size:36px;padding:0;border-radius:var(--r-s);border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-2);display:grid;place-items:center;cursor:pointer;
+}
+.icon-btn:hover{color:var(--ink);border-color:var(--line-2)}
+
+/* ---------- page head ---------- */
+.page-head{padding-block:26px 18px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.page-head h1{font-size:clamp(22px,2.4vw,29px);font-weight:700;letter-spacing:-.025em;line-height:1.15}
+.page-head p{color:var(--ink-2);font-size:13.5px;max-inline-size:58ch;margin-block-start:5px}
+.head-right{margin-inline-start:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  font:400 12px var(--mono);padding:4px 9px;border-radius:var(--r-s);
+  background:var(--surface);border:1px solid var(--line);color:var(--ink-2);
+}
+.chip svg{inline-size:13px;block-size:13px;color:var(--accent)}
+
+/* ---------- alarm strip ---------- */
+.alert-bar{
+  display:flex;align-items:center;gap:11px;
+  padding:12px 16px;border-radius:var(--r);margin-block-end:18px;
+  border:1px solid var(--line);background:var(--surface);
+  font-size:14px;font-weight:600;
+  transition:background .2s,border-color .2s,color .2s;
+}
+.alert-bar>span:first-of-type{flex:1;min-inline-size:0}
+.alert-bar .ico{inline-size:19px;block-size:19px;display:none;flex:none}
+.alert-bar[data-state="ok"]{border-color:var(--ok-line);background:var(--ok-bg);color:var(--ok)}
+.alert-bar[data-state="ok"] .a-ok{display:block}
+.alert-bar[data-state="warn"]{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn)}
+.alert-bar[data-state="warn"] .a-alert{display:block}
+.alert-bar[data-state="err"]{border-color:var(--alarm-line);background:var(--alarm-bg);color:var(--alarm)}
+.alert-bar[data-state="err"] .a-alert{display:block}
+.alert-bar[data-state="idle"]{color:var(--ink-2)}
+.alert-bar[data-state="idle"] .a-idle{display:block}
+.alert-tally{
+  font:600 11.5px var(--mono);padding:3px 9px;border-radius:100px;
+  background:var(--surface);border:1px solid var(--line-2);color:var(--ink-2);white-space:nowrap;
+}
+
+/* ---------- sensor tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-block-end:18px}
+.tile{
+  --ch:var(--ink-3);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:15px 16px 13px;position:relative;overflow:hidden;
+  transition:border-color .2s,background .2s;
+  box-shadow:var(--shadow);
+}
+.tile::after{
+  content:"";position:absolute;inset-block-start:0;inset-inline-start:0;
+  inline-size:100%;block-size:2px;background:var(--ch);opacity:.85;
+}
+.tile[data-ch="bpm"]{--ch:var(--ch-bpm)}
+.tile[data-ch="spo2"]{--ch:var(--ch-spo2)}
+.tile[data-ch="accel"]{--ch:var(--ch-accel)}
+.tile[data-ch="jarak"]{--ch:var(--ch-jarak)}
+.tile[data-alarm="1"]{border-color:var(--alarm-line);background:var(--alarm-bg)}
+.tile-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-block-end:8px}
+.tile-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink)}
+.tile-label svg{inline-size:16px;block-size:16px;color:var(--ch)}
+.tile-tag{
+  font:600 10px var(--mono);letter-spacing:.08em;padding:2px 6px;border-radius:4px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);
+}
+.tile-val{display:flex;align-items:baseline;gap:6px;margin-block-end:9px}
+.tile-num{
+  font:600 clamp(28px,2.8vw,38px)/1 var(--mono);letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;
+}
+.tile[data-alarm="1"] .tile-num{color:var(--alarm)}
+.tile-unit{font-size:12.5px;font-weight:500;color:var(--ink-3)}
+.spark{block-size:52px;position:relative}
+.tile-foot{display:flex;align-items:center;gap:6px;margin-block-start:9px;font-size:12px;color:var(--ink-2)}
+.dot{inline-size:7px;block-size:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.dot[data-s="ok"]{background:var(--ok)}
+.dot[data-s="warn"]{background:var(--warn)}
+.dot[data-s="err"]{background:var(--alarm)}
+.tile-thresh{margin-block-start:3px;font:400 11px var(--mono);color:var(--ink-3)}
+@media (max-width:1080px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.tiles{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- layout split ---------- */
+.split{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-block-end:18px;align-items:start}
+@media (max-width:1080px){.split{grid-template-columns:minmax(0,1fr)}}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 18px;box-shadow:var(--shadow);
+}
+.card-head{display:flex;align-items:center;gap:9px;margin-block-end:14px}
+.card-head h2{font-size:14px;font-weight:700;letter-spacing:-.01em;margin-inline-end:auto}
+.card-head svg{inline-size:16px;block-size:16px;color:var(--ink-3)}
+.card-head .hint{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
+.stat{background:var(--surface);padding:10px 12px;min-inline-size:0}
+.stat-k{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-block-end:3px}
+.stat-v{font:600 15px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-v[data-tone="ok"]{color:var(--ok)}
+.stat-v[data-tone="bad"]{color:var(--alarm)}
+
+/* ---------- control panel ---------- */
+.ctl{display:flex;flex-direction:column;gap:2px}
+.ctl-row{
+  display:flex;align-items:center;gap:12px;padding:11px 0;
+  border-block-end:1px solid var(--line);
+}
+.ctl-row:last-of-type{border-block-end:0}
+.ctl-txt{flex:1;min-inline-size:0}
+.ctl-name{font-size:13.5px;font-weight:600;display:block}
+.ctl-desc{font-size:11.5px;color:var(--ink-3);display:block;margin-block-start:1px}
+.ctl-desc code{font:400 11px var(--mono);background:var(--surface-2);padding:1px 4px;border-radius:3px;border:1px solid var(--line)}
+
+.switch{position:relative;display:inline-flex;flex:none;cursor:pointer}
+.switch input{
+  appearance:none;-webkit-appearance:none;margin:0;
+  inline-size:46px;block-size:26px;border-radius:100px;
+  background:var(--surface-2);border:1px solid var(--line-2);
+  cursor:pointer;transition:background .18s,border-color .18s;position:relative;
+}
+.switch input::before{
+  content:"";position:absolute;inset-block-start:50%;inset-inline-start:3px;
+  translate:0 -50%;inline-size:18px;block-size:18px;border-radius:50%;
+  background:var(--ink-3);transition:translate .18s,background .18s;
+}
+.switch input:checked{background:var(--accent);border-color:var(--accent)}
+.switch input:checked::before{translate:20px -50%;background:light-dark(#fff,#04211e)}
+.switch input:disabled{opacity:.45;cursor:not-allowed}
+.switch input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+.numfield{
+  display:flex;align-items:center;gap:5px;flex:none;
+  border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface);
+  padding:0 8px;min-block-size:36px;
+}
+.numfield:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent)}
+.numfield input{
+  border:0;background:transparent;color:var(--ink);
+  font:500 13px var(--mono);inline-size:56px;padding:0;text-align:end;
+  -moz-appearance:textfield;
+}
+.numfield input::-webkit-outer-spin-button,.numfield input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.numfield input:focus{outline:none}
+.numfield span{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+
+/* ---------- ack trace ---------- */
+.ack-log{list-style:none;display:flex;flex-direction:column;gap:6px;max-block-size:196px;overflow-y:auto;margin-block-start:12px}
+.ack-log:empty::after{
+  content:"Belum ada perintah terkirim. Status ACK akan muncul di sini.";
+  font-size:12px;color:var(--ink-3);display:block;padding-block:10px;
+}
+.ack-item{
+  display:flex;align-items:center;gap:8px;font-size:12px;
+  padding:6px 9px;border-radius:var(--r-s);background:var(--surface-2);
+  border:1px solid var(--line);
+}
+.ack-item[data-ok="1"]{border-color:var(--ok-line);background:var(--ok-bg);color:var(--ok)}
+.ack-item[data-ok="0"]{border-color:var(--alarm-line);background:var(--alarm-bg);color:var(--alarm)}
+.ack-cmd{font:500 11.5px var(--mono);margin-inline-end:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ack-ms{font:500 11px var(--mono);opacity:.8;flex:none}
+.ack-t{font:400 10.5px var(--mono);opacity:.6;flex:none}
+
+/* ---------- log table ---------- */
+.log-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-block-end:12px}
+.log-tools h2{font-size:14px;font-weight:700;margin-inline-end:auto;display:flex;align-items:center;gap:8px}
+.count-pill{font:600 11px var(--mono);padding:2px 8px;border-radius:100px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3)}
+.tbl-wrap{overflow:auto;max-block-size:400px;border-radius:var(--r-s);border:1px solid var(--line);scrollbar-color:var(--line-2) transparent}
+table{inline-size:100%;border-collapse:collapse;font-size:12.5px}
+thead th{
+  position:sticky;inset-block-start:0;z-index:2;
+  text-align:start;padding:9px 12px;white-space:nowrap;
+  font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);border-block-end:1px solid var(--line);
+}
+tbody td{padding:7px 12px;font-family:var(--mono);white-space:nowrap;border-block-end:1px solid var(--bg)}
+tbody tr:last-child td{border-block-end:0}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr[data-alarm="1"]{background:var(--alarm-bg)}
+.num{text-align:end}
+.muted{color:var(--ink-3)}
+td.empty{text-align:center;padding:32px 16px;font-family:var(--font);color:var(--ink-3);white-space:normal}
+
+.pill{display:inline-block;padding:1px 7px;border-radius:4px;font:600 11px var(--font);border:1px solid}
+.pill[data-k="ok"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line)}
+.pill[data-k="err"]{background:var(--alarm-bg);color:var(--alarm);border-color:var(--alarm-line)}
+.pill[data-k="hist"]{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-line)}
+
+/* ---------- details ---------- */
+details.panel{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:0 18px;margin-block-end:16px;
+}
+details.panel>summary{
+  display:flex;align-items:center;gap:9px;min-block-size:46px;
+  cursor:pointer;list-style:none;font-size:13.5px;font-weight:600;user-select:none;
+}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::after{
+  content:"";margin-inline-start:auto;inline-size:8px;block-size:8px;flex:none;
+  border-inline-end:2px solid var(--ink-3);border-block-end:2px solid var(--ink-3);
+  rotate:45deg;transition:rotate .2s;
+}
+details.panel[open]>summary::after{rotate:-135deg}
+details.panel>summary svg{inline-size:15px;block-size:15px;color:var(--ink-3)}
+.panel-body{padding-block:2px 16px;border-block-start:1px solid var(--line);margin-block-start:2px}
+.field-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding-block:12px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11.5px;font-weight:500;color:var(--ink-2)}
+.field .numfield{min-block-size:36px}
+.small-note{font-size:11.5px;color:var(--ink-3);padding-block-start:8px}
+
+footer.exec{
+  max-inline-size:1440px;margin:26px auto 0;padding:14px 24px 40px;
+  border-block-start:1px solid var(--line);
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--ink-3);
+}
+footer.exec code{font-family:var(--mono)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:.001s!important;animation-duration:.001s!important}
+}
 </style>
 </head>
 <body>
-  <main class="card">
-    <span class="badge">Fase 2 · backend MQTT &amp; pengaturan</span>
-    <h1>Smart Ergo</h1>
-    <p class="ver">versi 0.2.0 · Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS</p>
 
-    <section class="mqtt-box" aria-label="Status MQTT latar">
-      <div class="mqtt-top">
-        <span class="pill" id="brokerPill" data-state="connecting">Broker: menghubungkan…</span>
-        <span class="pill" id="nodesPill">Vital: menunggu · Ergo: menunggu</span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-wave" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></symbol>
+  <symbol id="i-lungs" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M8.5 8.5 10 12l-1 3-4.5 2.5a2 2 0 0 1-2.8-1.9L2 9a2 2 0 0 1 3.4-1.4z"/><path d="M15.5 8.5 14 12l1 3 4.5 2.5a2 2 0 0 0 2.8-1.9L22 9a2 2 0 0 0-3.4-1.4z"/></symbol>
+  <symbol id="i-tilt" viewBox="0 0 24 24"><path d="M4 18h9l7-7"/><circle cx="20" cy="11" r="2"/><path d="M2 12h4M2 8h6"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M2 12h20M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><polyline points="22 4 12 14 9 11"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-idle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 10V4h-6"/><path d="M3 14v6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L21 8M21 15a9 9 0 0 1-14.9 3.4L3 16"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.5m-8.5 0a6 6 0 0 1 0-8.5"/><path d="M19.1 4.9a10 10 0 0 1 0 14.1m-14.1 0a10 10 0 0 1 0-14.1"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2.1 2.1 0 0 1-3-3l9.4-9.4a4 4 0 0 0-2-2z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+</defs></svg>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><svg class="ico"><use href="#i-wave"/></svg></span>
+      <span class="brand-txt">
+        <span class="brand-name">Smart Ergo</span>
+        <span class="brand-sub">Kendali &amp; Telemetri</span>
+      </span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="sig" id="sigBroker" data-state="warn" role="status">Broker: menghubungkan…</span>
+      <span class="sig" id="sigVital" role="status">Vital: menunggu</span>
+      <span class="sig" id="sigErgo" role="status">Ergo: menunggu</span>
+    </div>
+
+    <button class="icon-btn" id="btnTheme" type="button" aria-label="Ganti tema terang / gelap" title="Ganti tema">
+      <svg class="ico"><use href="#i-moon"/></svg>
+    </button>
+    <button class="icon-btn" id="btnReconnect" type="button" aria-label="Sambungkan ulang MQTT" title="Sambung ulang MQTT">
+      <svg class="ico"><use href="#i-refresh"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSettings" type="button" aria-label="Buka pengaturan broker" title="Pengaturan broker">
+      <svg class="ico"><use href="#i-gear"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="shell">
+  <div class="page-head">
+    <div>
+      <h1>Kendali &amp; Telemetri Dua Node</h1>
+      <p>Node vital membaca MAX30102, node ergo membaca postur dan jarak. Perintah dari panel ini dikirim ke node ergo lewat MQTT dan dikonfirmasi oleh <em>acknowledgment</em>.</p>
+    </div>
+    <div class="head-right">
+      <span class="chip" id="chipTopic"><svg><use href="#i-radio"/></svg><span id="chipTopicText">pens/uC2/smartergo</span></span>
+      <span class="chip" id="clock">--:--:--</span>
+    </div>
+  </div>
+
+  <div class="alert-bar" id="alertBar" data-state="idle" role="status" aria-live="polite">
+    <svg class="ico a-idle" aria-hidden="true"><use href="#i-idle"/></svg>
+    <svg class="ico a-ok" aria-hidden="true"><use href="#i-check"/></svg>
+    <svg class="ico a-alert" aria-hidden="true"><use href="#i-alert"/></svg>
+    <span id="alertText">Menunggu paket telemetri pertama…</span>
+    <span class="alert-tally" id="alertTally">Alarm: 0</span>
+  </div>
+
+  <section class="tiles" aria-label="Nilai sensor terkini">
+    <article class="tile" data-ch="bpm" id="tileBpm">
+      <div class="tile-head">
+        <span class="tile-label"><svg aria-hidden="true"><use href="#i-heart"/></svg>Detak jantung</span>
+        <span class="tile-tag">BPM</span>
       </div>
-      <div class="grid">
-        <div class="stat"><p class="stat-k">Paket /vital</p><p class="stat-v" id="cntVital">0</p></div>
-        <div class="stat"><p class="stat-k">Paket /ergo</p><p class="stat-v" id="cntErgo">0</p></div>
-        <div class="stat"><p class="stat-k">Paket /ack</p><p class="stat-v" id="cntAck">0</p></div>
+      <p class="tile-val"><span class="tile-num" id="valBpm">--</span><span class="tile-unit">bpm</span></p>
+      <div class="spark"><canvas id="spBpm" role="img" aria-label="Tren detak jantung"></canvas></div>
+      <p class="tile-foot"><span class="dot" id="dotBpm"></span><span id="stBpm">Menunggu data…</span></p>
+      <p class="tile-thresh" id="thBpm">Ambang 60–100 bpm</p>
+    </article>
+
+    <article class="tile" data-ch="spo2" id="tileSpo2">
+      <div class="tile-head">
+        <span class="tile-label"><svg aria-hidden="true"><use href="#i-lungs"/></svg>Saturasi oksigen</span>
+        <span class="tile-tag">SPO2</span>
       </div>
-      <div class="meta" id="metaLine">broker.hivemq.com:1883 · pens/uC2/smartergo</div>
-      <div class="actions">
-        <button type="button" id="btnSettings">Pengaturan Broker</button>
-        <button type="button" id="btnReconnect">Sambung Ulang</button>
+      <p class="tile-val"><span class="tile-num" id="valSpo2">--</span><span class="tile-unit">%</span></p>
+      <div class="spark"><canvas id="spSpo2" role="img" aria-label="Tren saturasi oksigen"></canvas></div>
+      <p class="tile-foot"><span class="dot" id="dotSpo2"></span><span id="stSpo2">Menunggu data…</span></p>
+      <p class="tile-thresh" id="thSpo2">Ambang ≥ 95 %</p>
+    </article>
+
+    <article class="tile" data-ch="accel" id="tileAccel">
+      <div class="tile-head">
+        <span class="tile-label"><svg aria-hidden="true"><use href="#i-tilt"/></svg>Kemiringan X</span>
+        <span class="tile-tag">IMU</span>
+      </div>
+      <p class="tile-val"><span class="tile-num" id="valAccel">--</span><span class="tile-unit">m/s²</span></p>
+      <div class="spark"><canvas id="spAccel" role="img" aria-label="Tren akselerometer sumbu X"></canvas></div>
+      <p class="tile-foot"><span class="dot" id="dotAccel"></span><span id="stAccel">Menunggu data…</span></p>
+      <p class="tile-thresh" id="thAccel">Ambang |X| &lt; 2,0 m/s²</p>
+    </article>
+
+    <article class="tile" data-ch="jarak" id="tileJarak">
+      <div class="tile-head">
+        <span class="tile-label"><svg aria-hidden="true"><use href="#i-ruler"/></svg>Jarak pandang</span>
+        <span class="tile-tag">DIST</span>
+      </div>
+      <p class="tile-val"><span class="tile-num" id="valJarak">--</span><span class="tile-unit">cm</span></p>
+      <div class="spark"><canvas id="spJarak" role="img" aria-label="Tren jarak pandang"></canvas></div>
+      <p class="tile-foot"><span class="dot" id="dotJarak"></span><span id="stJarak">Menunggu data…</span></p>
+      <p class="tile-thresh" id="thJarak">Ambang ≥ 30 cm</p>
+    </article>
+  </section>
+
+  <div class="split">
+    <section class="card" aria-labelledby="h-trend">
+      <div class="card-head">
+        <svg aria-hidden="true"><use href="#i-wave"/></svg>
+        <h2 id="h-trend">Tren gabungan</h2>
+        <span class="hint" id="trendHint">60 sampel terakhir</span>
+      </div>
+      <div style="block-size:210px;position:relative">
+        <canvas id="chartMain" role="img" aria-label="Grafik tren detak jantung dan jarak"></canvas>
+      </div>
+      <div class="stats" style="margin-block-start:14px">
+        <div class="stat"><p class="stat-k">Laju vital</p><p class="stat-v" id="stRate">-- Hz</p></div>
+        <div class="stat"><p class="stat-k">Latensi tampilan</p><p class="stat-v" id="stRender">-- ms</p></div>
+        <div class="stat"><p class="stat-k">Paket hilang</p><p class="stat-v" id="stLoss">0</p></div>
+        <div class="stat"><p class="stat-k">Valid / rusak</p><p class="stat-v" id="stCounts">0 / 0</p></div>
+        <div class="stat"><p class="stat-k">Latensi ACK</p><p class="stat-v" id="stAck">-- ms</p></div>
+        <div class="stat"><p class="stat-k">Durasi sesi</p><p class="stat-v" id="stUptime">00:00</p></div>
       </div>
     </section>
 
-    <ul>
-      <li>Worker MQTT berjalan di latar (<code>rumqttc</code>) dan tetap hidup saat window ditutup.</li>
-      <li>Konfigurasi broker disimpan di <code>%APPDATA%\id.pens.smartergo\config.json</code>.</li>
-      <li>Dashboard lengkap (grafik, kendali, log) dipasang pada Fase 3.</li>
-    </ul>
-    <footer>Smart Ergo · id.pens.smartergo</footer>
-  </main>
+    <section class="card" aria-labelledby="h-ctl">
+      <div class="card-head">
+        <svg aria-hidden="true"><use href="#i-sliders"/></svg>
+        <h2 id="h-ctl">Kendali node ergo</h2>
+        <span class="hint">/cmd → /ack</span>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-row">
+          <span class="ctl-txt">
+            <span class="ctl-name" id="lblLed">Lampu indikator</span>
+            <span class="ctl-desc">GPIO 2 · <code>{"cmd":"led"}</code></span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" id="swLed" role="switch" aria-labelledby="lblLed">
+          </label>
+        </div>
+
+        <div class="ctl-row">
+          <span class="ctl-txt">
+            <span class="ctl-name" id="lblBuzzer">Buzzer alarm</span>
+            <span class="ctl-desc">GPIO 4 · <code>{"cmd":"buzzer"}</code></span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" id="swBuzzer" role="switch" aria-labelledby="lblBuzzer">
+          </label>
+        </div>
+
+        <div class="ctl-row">
+          <span class="ctl-txt">
+            <span class="ctl-name" id="lblThr">Ambang BPM alarm</span>
+            <span class="ctl-desc">Divalidasi di MCU · <code>{"cmd":"thr_bpm"}</code></span>
+          </span>
+          <span class="numfield">
+            <input type="number" id="inpThr" min="40" max="200" step="1" value="100" aria-labelledby="lblThr">
+            <span>bpm</span>
+          </span>
+          <button class="btn" id="btnThr" type="button">Kirim</button>
+        </div>
+
+        <div class="ctl-row">
+          <span class="ctl-txt">
+            <span class="ctl-name" id="lblRate">Periode kirim telemetri</span>
+            <span class="ctl-desc">Ubah beban jaringan · <code>{"cmd":"interval"}</code></span>
+          </span>
+          <span class="numfield">
+            <input type="number" id="inpRate" min="100" max="2000" step="50" value="500" aria-labelledby="lblRate">
+            <span>ms</span>
+          </span>
+          <button class="btn" id="btnRate" type="button">Kirim</button>
+        </div>
+      </div>
+
+      <h3 class="stat-k" style="margin-block-start:16px">Jejak acknowledgment</h3>
+      <ul class="ack-log" id="ackLog" aria-live="polite" aria-label="Riwayat acknowledgment perintah"></ul>
+    </section>
+  </div>
+
+  <details class="panel" id="panelThresh">
+    <summary><svg aria-hidden="true"><use href="#i-tool"/></svg>Ambang penilaian lokal</summary>
+    <div class="panel-body">
+      <p class="small-note">Ambang ini hanya memengaruhi penilaian di dashboard. Nilai yang dikirim ke MCU memakai kolom “Ambang BPM alarm”.</p>
+      <div class="field-row">
+        <div class="field"><label for="inJarak">Jarak minimum</label><span class="numfield"><input type="number" id="inJarak" min="5" max="200" value="30"><span>cm</span></span></div>
+        <div class="field"><label for="inAccel">|X| maksimum</label><span class="numfield"><input type="number" id="inAccel" min="0.2" max="20" step="0.1" value="2.0"><span>m/s²</span></span></div>
+        <div class="field"><label for="inBpmMin">BPM minimum</label><span class="numfield"><input type="number" id="inBpmMin" min="30" max="150" value="60"><span>bpm</span></span></div>
+        <div class="field"><label for="inBpmMax">BPM maksimum</label><span class="numfield"><input type="number" id="inBpmMax" min="60" max="220" value="100"><span>bpm</span></span></div>
+        <div class="field"><label for="inSpo2">SpO2 minimum</label><span class="numfield"><input type="number" id="inSpo2" min="70" max="100" value="95"><span>%</span></span></div>
+        <button class="btn" id="btnResetThresh" type="button">Pulihkan bawaan</button>
+      </div>
+    </div>
+  </details>
+
+  <section aria-labelledby="h-log">
+    <div class="log-tools">
+      <h2 id="h-log">Log real-time <span class="count-pill" id="logCount">0 entri</span></h2>
+      <label class="sr" for="selFilter">Saring log</label>
+      <select id="selFilter" style="min-block-size:36px;padding:0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font:400 12.5px var(--font)">
+        <option value="all">Semua baris</option>
+        <option value="alarm">Hanya alarm</option>
+        <option value="cmd">Hanya perintah</option>
+      </select>
+      <button class="btn" id="btnPause" type="button" aria-pressed="false"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg><span>Jeda</span></button>
+      <button class="btn" id="btnCsv" type="button"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Ekspor CSV</span></button>
+      <button class="btn" id="btnResetStats" type="button">Reset statistik</button>
+      <button class="btn" id="btnClear" type="button" data-variant="stop"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>Hapus</span></button>
+    </div>
+
+    <div class="tbl-wrap" tabindex="0" role="region" aria-label="Tabel log dapat digulir">
+      <table>
+        <caption class="sr">Log telemetri dan perintah kendali</caption>
+        <thead>
+          <tr>
+            <th scope="col">Waktu</th>
+            <th scope="col">Jenis</th>
+            <th scope="col">Node</th>
+            <th scope="col" class="num">Seq</th>
+            <th scope="col" class="num">BPM</th>
+            <th scope="col" class="num">SpO2</th>
+            <th scope="col" class="num">X</th>
+            <th scope="col" class="num">Jarak</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="9" class="empty">Belum ada data. Tunggu paket dari node atau jalankan Smart Ergo Simulasi.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="exec">
+  <span>Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS · v0.3.0</span>
+  <span>Topik <code id="footTopic">pens/uC2/smartergo/{vital,ergo,cmd,ack}</code> · QoS 0</span>
+</footer>
 
 <script>
 'use strict';
@@ -177,56 +628,676 @@
 const tauri = window.__TAURI__;
 const invoke = tauri?.core?.invoke;
 const listen = tauri?.event?.listen;
-const $ = (id) => document.getElementById(id);
 
-const counts = { vital: 0, ergo: 0, ack: 0 };
+const CFG = {
+  base     : 'pens/uC2/smartergo',
+  points   : 60,
+  rows     : 100,
+  maxLog   : 5000,
+  ackWindow: 5000,
+  lsThresh : 'se_thresholds_v2',
+};
 
-function paintStatus(snap) {
-  const bp = $('brokerPill');
-  bp.dataset.state = snap.state || 'connecting';
-  const labels = {
-    connected: 'Broker: terhubung',
-    connecting: 'Broker: menghubungkan…',
-    reconnecting: 'Broker: menyambung ulang…',
-    error: 'Broker: terputus',
-  };
-  bp.textContent = labels[snap.state] || ('Broker: ' + snap.state);
+const $ = id => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  const np = $('nodesPill');
-  np.dataset.state = (snap.vital_online && snap.ergo_online) ? 'connected'
-    : (snap.vital_online || snap.ergo_online) ? 'connecting' : '';
-  np.textContent = `Vital: ${snap.vital_online ? 'aktif' : 'menunggu'} · Ergo: ${snap.ergo_online ? 'aktif' : 'menunggu'}`;
+const DEFAULTS = { jarak: 30, accel: 2.0, bpmMin: 60, bpmMax: 100, spo2: 95 };
+let th = { ...DEFAULTS };
 
-  counts.vital = snap.vital_count || 0;
-  counts.ergo = snap.ergo_count || 0;
-  counts.ack = snap.ack_count || 0;
-  $('cntVital').textContent = counts.vital;
-  $('cntErgo').textContent = counts.ergo;
-  $('cntAck').textContent = counts.ack;
-  $('metaLine').textContent = `${snap.host}:${snap.port} · ${snap.base_topic} · ${snap.client_id}`;
+const S = {
+  startedAt: Date.now(),
+  lastVital: 0,
+  lastErgo: 0,
+  vitalVirtual: false,
+  ergoVirtual: false,
+  seqVital: null,
+  seqErgo: null,
+  lost: 0,
+  ok: 0,
+  bad: 0,
+  alarmCount: 0,
+  inAlarm: false,
+  paused: false,
+  filter: 'all',
+  pending: new Map(),
+  rates: [],
+  renders: [],
+  ackMs: [],
+  lastRate: 0,
+  lastPacket: null,
+  data: { bpm: null, spo2: null, accel: null, jarak: null },
+};
+
+/* ---------- theme ---------- */
+const metaScheme = document.querySelector('meta[name="color-scheme"]');
+const isDark = () => metaScheme.content === 'dark'
+  || (metaScheme.content === 'light dark' && matchMedia('(prefers-color-scheme: dark)').matches);
+
+function applyTheme(mode, persist = true) {
+  metaScheme.content = mode ?? 'light dark';
+  if (persist) {
+    try {
+      if (mode) localStorage.setItem('se-scheme', mode); else localStorage.removeItem('se-scheme');
+    } catch (e) {}
+  }
+  $('btnTheme').querySelector('use').setAttribute('href', isDark() ? '#i-sun' : '#i-moon');
+  if (window.__chartsReady) syncChartTheme();
+}
+$('btnTheme').addEventListener('click', () => applyTheme(isDark() ? 'light' : 'dark'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (metaScheme.content === 'light dark') $('btnTheme').querySelector('use').setAttribute('href', isDark() ? '#i-sun' : '#i-moon');
+});
+applyTheme(localStorage.getItem('se-scheme'));
+
+/* ---------- helpers ---------- */
+const nowId = () => new Date().toLocaleTimeString('id-ID');
+const fmt = (v, d) => (v === null || !Number.isFinite(v)) ? '--' : v.toFixed(d);
+const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------- thresholds ---------- */
+function loadThresholds() {
+  try {
+    const p = JSON.parse(localStorage.getItem(CFG.lsThresh) || 'null');
+    if (p) for (const k in DEFAULTS) if (Number.isFinite(+p[k])) th[k] = +p[k];
+  } catch (e) {}
+  paintThresholds();
+}
+function paintThresholds() {
+  $('inJarak').value = th.jarak;
+  $('inAccel').value = th.accel;
+  $('inBpmMin').value = th.bpmMin;
+  $('inBpmMax').value = th.bpmMax;
+  $('inSpo2').value = th.spo2;
+  $('thBpm').textContent = `Ambang ${th.bpmMin}–${th.bpmMax} bpm`;
+  $('thSpo2').textContent = `Ambang ≥ ${th.spo2} %`;
+  $('thAccel').textContent = `Ambang |X| < ${th.accel.toFixed(1)} m/s²`;
+  $('thJarak').textContent = `Ambang ≥ ${th.jarak} cm`;
+  $('inpThr').value = th.bpmMax;
+}
+function saveThresholds() {
+  try { localStorage.setItem(CFG.lsThresh, JSON.stringify(th)); } catch (e) {}
+}
+['inJarak', 'inAccel', 'inBpmMin', 'inBpmMax', 'inSpo2'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    const v = parseFloat($(id).value);
+    if (!Number.isFinite(v) || v <= 0) { paintThresholds(); return; }
+    const key = { inJarak: 'jarak', inAccel: 'accel', inBpmMin: 'bpmMin', inBpmMax: 'bpmMax', inSpo2: 'spo2' }[id];
+    th[key] = v;
+    if (th.bpmMax <= th.bpmMin) th.bpmMax = th.bpmMin + 1;
+    saveThresholds();
+    paintThresholds();
+    if (S.lastPacket) evaluate(S.lastPacket, false);
+  });
+});
+$('btnResetThresh').addEventListener('click', () => {
+  th = { ...DEFAULTS };
+  saveThresholds();
+  paintThresholds();
+  if (S.lastPacket) evaluate(S.lastPacket, false);
+});
+
+/* ---------- parser ---------- */
+function num(v) {
+  if (v === null || v === undefined || typeof v === 'boolean' || typeof v === 'object') return NaN;
+  if (typeof v === 'string' && !v.trim()) return NaN;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
 }
 
-async function init() {
-  if (!invoke) return;
+/* Validasi ketat payload node. Mengembalikan {ok, part, data|error}. */
+function parsePacket(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'payload kosong' };
+  let o;
+  try { o = JSON.parse(raw.trim()); }
+  catch (e) { return { ok: false, error: 'JSON tidak valid' }; }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { ok: false, error: 'bukan objek JSON' };
+
+  const part = typeof o.device === 'string' && /vital/i.test(o.device) ? 'vital'
+    : (typeof o.device === 'string' && /ergo/i.test(o.device)) ? 'ergo'
+    : ('bpm' in o || 'spo2' in o) ? 'vital' : 'ergo';
+
+  const dev = String(o.device || 'node');
+  const d = {
+    part,
+    device: dev,
+    isVirtual: dev.startsWith('Virtual_'),
+    seq: num(o.seq),
+    ts: num(o.ts),
+  };
+
+  if (part === 'vital') {
+    if (!('bpm' in o) || !('spo2' in o)) return { ok: false, error: 'field bpm/spo2 hilang' };
+    d.bpm = num(o.bpm);
+    d.spo2 = num(o.spo2);
+    if (!Number.isFinite(d.bpm) || !Number.isFinite(d.spo2)) return { ok: false, error: 'bpm/spo2 non-numerik' };
+    if (d.bpm < 0 || d.bpm > 300) return { ok: false, error: `bpm di luar batas (${d.bpm})` };
+    if (d.spo2 < 0 || d.spo2 > 100) return { ok: false, error: `spo2 di luar batas (${d.spo2})` };
+  } else {
+    if (!('accel_x' in o) || !('jarak' in o)) return { ok: false, error: 'field accel_x/jarak hilang' };
+    d.accel = num(o.accel_x);
+    if (!Number.isFinite(d.accel) || Math.abs(d.accel) > 80) return { ok: false, error: 'accel_x tidak masuk akal' };
+    const rj = o.jarak;
+    d.jarak = (rj === null || (typeof rj === 'string' && /^(null|n\/a)$/i.test(rj.trim()))) ? null : num(rj);
+    if (d.jarak !== null && (!Number.isFinite(d.jarak) || d.jarak > 500)) return { ok: false, error: 'jarak korup' };
+    d.led = (o.led === 0 || o.led === 1) ? o.led : null;
+    d.buzzer = (o.buzzer === 0 || o.buzzer === 1) ? o.buzzer : null;
+  }
+  if (!Number.isFinite(d.seq)) d.seq = null;
+  return { ok: true, data: d };
+}
+window.__parsePacket = parsePacket;
+
+/* ---------- charts ---------- */
+const probe = document.createElement('span');
+probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none';
+document.body.appendChild(probe);
+function col(n, alphaPct) {
+  probe.style.color = '';
+  probe.style.color = alphaPct ? `color-mix(in oklab, var(${n}) ${alphaPct}%, transparent)` : `var(${n})`;
+  const v = getComputedStyle(probe).color;
+  return v && v !== 'rgba(0, 0, 0, 0)' ? v : '#888';
+}
+
+function spark(id, colorVar) {
+  const ctx = $(id).getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 52);
+  g.addColorStop(0, col(colorVar, 14));
+  g.addColorStop(1, col(colorVar, 0));
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderColor: col(colorVar), borderWidth: 1.8, backgroundColor: g, fill: true, tension: .35, pointRadius: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false, grace: '20%' } },
+      interaction: { mode: null },
+    },
+  });
+}
+
+const CH = {
+  bpm  : spark('spBpm', '--ch-bpm'),
+  spo2 : spark('spSpo2', '--ch-spo2'),
+  accel: spark('spAccel', '--ch-accel'),
+  jarak: spark('spJarak', '--ch-jarak'),
+};
+
+const mainChart = new Chart($('chartMain').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'BPM', data: [], borderColor: col('--ch-bpm'), borderWidth: 2, tension: .35, pointRadius: 0, yAxisID: 'y' },
+      { label: 'Jarak (cm)', data: [], borderColor: col('--ch-jarak'), borderWidth: 2, borderDash: [5, 4], tension: .35, pointRadius: 0, yAxisID: 'y1' },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, color: col('--ink-2'), font: { size: 11 } } },
+      tooltip: { backgroundColor: col('--surface'), titleColor: col('--ink'), bodyColor: col('--ink-2'), borderColor: col('--line-2'), borderWidth: 1, padding: 10 },
+    },
+    scales: {
+      x: { display: false },
+      y:  { position: 'left',  suggestedMin: 55, suggestedMax: 110, ticks: { color: col('--ink-3'), font: { size: 10 }, maxTicksLimit: 4 }, grid: { color: col('--line') }, border: { display: false } },
+      y1: { position: 'right', suggestedMin: 20, suggestedMax: 70, ticks: { color: col('--ink-3'), font: { size: 10 }, maxTicksLimit: 4 }, grid: { display: false }, border: { display: false } },
+    },
+  },
+});
+
+function syncChartTheme() {
+  CH.bpm.data.datasets[0].borderColor = col('--ch-bpm');
+  CH.spo2.data.datasets[0].borderColor = col('--ch-spo2');
+  CH.accel.data.datasets[0].borderColor = col('--ch-accel');
+  CH.jarak.data.datasets[0].borderColor = col('--ch-jarak');
+  Object.values(CH).forEach(c => c.update('none'));
+  mainChart.data.datasets[0].borderColor = col('--ch-bpm');
+  mainChart.data.datasets[1].borderColor = col('--ch-jarak');
+  mainChart.options.plugins.legend.labels.color = col('--ink-2');
+  mainChart.options.scales.y.ticks.color = col('--ink-3');
+  mainChart.options.scales.y1.ticks.color = col('--ink-3');
+  mainChart.options.scales.y.grid.color = col('--line');
+  mainChart.update('none');
+}
+window.__chartsReady = true;
+
+function pushChart(chart, v, slot) {
+  const d = chart.data;
+  d.labels.push('');
+  if (slot === undefined) d.datasets[0].data.push(v);
+  else d.datasets[slot].data.push(v);
+  if (d.labels.length > CFG.points) {
+    d.labels.shift();
+    d.datasets.forEach(ds => ds.data.shift());
+  }
+  chart.update('none');
+}
+
+/* ---------- tile status ---------- */
+const STATUS = {
+  bpm: v => v === null ? ['Menunggu data…', ''] : v <= 0 ? ['Sensor idle', '']
+    : v < th.bpmMin ? ['Bradikardi', 'err'] : v <= th.bpmMax ? ['Normal', 'ok'] : ['Takikardi', 'err'],
+  spo2: v => v === null ? ['Menunggu data…', ''] : v <= 0 ? ['Sensor idle', '']
+    : v >= th.spo2 ? ['Normal', 'ok'] : ['Di bawah ambang', 'err'],
+  accel: v => v === null ? ['Menunggu data…', ''] : Math.abs(v) < th.accel * .35 ? ['Postur stabil', 'ok']
+    : Math.abs(v) < th.accel ? ['Sedikit bergerak', 'warn'] : ['Postur menyimpang', 'err'],
+  jarak: v => v === null ? ['Sensor idle / N/A', ''] : v < th.jarak ? ['Terlalu dekat', 'err'] : ['Jarak ideal', 'ok'],
+};
+
+const TILES = {
+  bpm:   { field: 'bpm',   dec: 1, fmt: v => fmt(v, 1) },
+  spo2:  { field: 'spo2',  dec: 1, fmt: v => fmt(v, 1) },
+  accel: { field: 'accel', dec: 3, fmt: v => fmt(v, 2) },
+  jarak: { field: 'jarak', dec: 1, fmt: v => v === null ? 'N/A' : fmt(v, 1) },
+};
+
+/* ---------- alarm evaluation ---------- */
+function evaluate(d, count = true) {
+  const flags = { bpm: false, spo2: false, accel: false, jarak: false };
+  const why = [];
+
+  if (d.jarak !== null && d.jarak >= 0 && d.jarak < th.jarak) {
+    flags.jarak = true; why.push(`jarak ${d.jarak.toFixed(1)} cm`);
+  }
+  if (d.accel !== null && Math.abs(d.accel) >= th.accel) {
+    flags.accel = true; why.push(`kemiringan ${Math.abs(d.accel).toFixed(2)} m/s²`);
+  }
+  if (d.bpm !== null && d.bpm > 0 && (d.bpm < th.bpmMin || d.bpm > th.bpmMax)) {
+    flags.bpm = true; why.push(`BPM ${d.bpm.toFixed(0)}`);
+  }
+  if (d.spo2 !== null && d.spo2 > 0 && d.spo2 < th.spo2) {
+    flags.spo2 = true; why.push(`SpO2 ${d.spo2.toFixed(0)} %`);
+  }
+
+  for (const k in TILES) {
+    const v = d[TILES[k].field] ?? null;
+    if (!(k in d) && v === null) continue;
+    const [txt, tone] = STATUS[k](v);
+    $('tile' + k[0].toUpperCase() + k.slice(1)).dataset.alarm = flags[k] ? '1' : '0';
+    $('st' + k[0].toUpperCase() + k.slice(1)).textContent = txt;
+    $('dot' + k[0].toUpperCase() + k.slice(1)).dataset.s = tone;
+  }
+
+  const bar = $('alertBar');
+  if (why.length) {
+    if (count && !S.inAlarm) S.alarmCount++;
+    S.inAlarm = true;
+    bar.dataset.state = 'err';
+    $('alertText').textContent = 'Alarm ergonomi — ' + why.join(' · ');
+  } else if (S.lastVital || S.lastErgo) {
+    S.inAlarm = false;
+    bar.dataset.state = 'ok';
+    $('alertText').textContent = 'Semua parameter dalam rentang normal.';
+  }
+  $('alertTally').textContent = `Alarm: ${S.alarmCount}`;
+  return { isAlarm: why.length > 0, why, flags };
+}
+
+/* ---------- log ---------- */
+let LOG = [];
+
+function row(r) {
+  const tr = document.createElement('tr');
+  if (r.alarm) tr.dataset.alarm = '1';
+  const kind = r.kind === 'cmd' ? '<span class="pill" data-k="hist">CMD</span>'
+    : r.kind === 'ack' ? `<span class="pill" data-k="${r.alarm ? 'err' : 'ok'}">ACK</span>`
+    : r.alarm ? '<span class="pill" data-k="err">ALARM</span>' : '<span class="pill" data-k="ok">AMAN</span>';
+  const cell = (v, cls = '') => `<td class="${cls}">${v}</td>`;
+  tr.innerHTML =
+    cell(esc(r.time), 'muted') +
+    cell(kind) +
+    cell(r.node ? esc(r.node) : '—', 'muted') +
+    cell(r.seq ?? '--', 'num muted') +
+    cell(r.bpm === null ? '--' : r.bpm.toFixed(1), 'num') +
+    cell(r.spo2 === null ? '--' : r.spo2.toFixed(1), 'num') +
+    cell(r.accel === null ? '--' : r.accel.toFixed(2), 'num') +
+    cell(r.jarak === null ? '--' : r.jarak.toFixed(1), 'num') +
+    cell(r.note ? esc(r.note) : (r.alarm ? 'Di luar ambang' : '—'), 'muted');
+  return tr;
+}
+
+function renderLog() {
+  const body = $('logBody');
+  $('logCount').textContent = `${LOG.length} entri`;
+  const list = S.filter === 'all' ? LOG : LOG.filter(r => r.kind === S.filter || (S.filter === 'alarm' && r.alarm));
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="9" class="empty">Belum ada data yang cocok dengan saringan.</td></tr>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  list.slice(-CFG.rows).reverse().forEach(r => frag.appendChild(row(r)));
+  body.replaceChildren(frag);
+}
+
+function log(r) {
+  LOG.push(r);
+  if (LOG.length > CFG.maxLog) LOG.shift();
+  $('logCount').textContent = `${LOG.length} entri`;
+  if (S.paused) return;
+  const shown = S.filter === 'all' || r.kind === S.filter || (S.filter === 'alarm' && r.alarm);
+  if (!shown) return;
+  const body = $('logBody');
+  const empty = body.querySelector('[colspan]');
+  if (empty) empty.closest('tr').remove();
+  body.prepend(row(r));
+  while (body.rows.length > CFG.rows) body.deleteRow(-1);
+}
+
+/* ---------- ingest ---------- */
+function ingest(raw, hydrate = false) {
+  const t0 = performance.now();
+  const p = parsePacket(raw);
+  if (!p.ok) {
+    S.bad++;
+    log({ time: nowId(), kind: 'bad', seq: null, bpm: null, spo2: null, accel: null, jarak: null, note: 'Rusak: ' + p.error });
+    paintStats();
+    return;
+  }
+
+  const d = p.data;
+  if (!hydrate) S.ok++;
+  const wall = Date.now();
+  if (d.part === 'vital') {
+    S.lastVital = wall;
+    S.vitalVirtual = d.isVirtual;
+    if (!hydrate && d.seq !== null) {
+      if (S.seqVital !== null && d.seq > S.seqVital) S.lost += d.seq - S.seqVital;
+      S.seqVital = d.seq + 1;
+    }
+    if (!hydrate) {
+      const rate = S.lastRate ? wall - S.lastRate : 0;
+      S.lastRate = wall;
+      if (rate > 0 && rate < 10000) { S.rates.push(rate); if (S.rates.length > 20) S.rates.shift(); }
+    }
+    S.data.bpm = d.bpm;
+    S.data.spo2 = d.spo2;
+    $('valBpm').textContent = fmt(d.bpm, 1);
+    $('valSpo2').textContent = fmt(d.spo2, 1);
+    if (d.bpm > 0) pushChart(CH.bpm, d.bpm);
+    if (d.spo2 > 0) pushChart(CH.spo2, d.spo2);
+    pushChart(mainChart, d.bpm > 0 ? d.bpm : null, 0);
+    $('sigVital').dataset.state = d.isVirtual ? 'sim' : 'ok';
+    $('sigVital').textContent = d.isVirtual ? 'Vital: virtual' : 'Vital: aktif';
+  } else {
+    S.lastErgo = wall;
+    S.ergoVirtual = d.isVirtual;
+    if (!hydrate && d.seq !== null) {
+      if (S.seqErgo !== null && d.seq > S.seqErgo) S.lost += d.seq - S.seqErgo;
+      S.seqErgo = d.seq + 1;
+    }
+    S.data.accel = d.accel;
+    S.data.jarak = d.jarak;
+    $('valAccel').textContent = fmt(d.accel, 2);
+    $('valJarak').textContent = d.jarak === null ? 'N/A' : fmt(d.jarak, 1);
+    pushChart(CH.accel, d.accel);
+    if (d.jarak !== null) pushChart(CH.jarak, d.jarak);
+    pushChart(mainChart, d.jarak === null ? null : d.jarak, 1);
+    $('sigErgo').dataset.state = d.isVirtual ? 'sim' : 'ok';
+    $('sigErgo').textContent = d.isVirtual ? 'Ergo: virtual' : 'Ergo: aktif';
+    if (d.led !== null && !S.pending.has('led')) $('swLed').checked = d.led === 1;
+    if (d.buzzer !== null && !S.pending.has('buzzer')) $('swBuzzer').checked = d.buzzer === 1;
+  }
+
+  S.lastPacket = {
+    bpm: S.data.bpm, spo2: S.data.spo2, accel: S.data.accel, jarak: S.data.jarak,
+  };
+
+  const info = evaluate(S.lastPacket, !hydrate);
+  if (!hydrate) {
+    log({
+      time: nowId(), kind: 'data', seq: d.seq, node: d.isVirtual ? `${d.part} (virtual)` : d.part,
+      bpm: d.part === 'vital' ? S.data.bpm : null,
+      spo2: d.part === 'vital' ? S.data.spo2 : null,
+      accel: d.part === 'ergo' ? S.data.accel : null,
+      jarak: d.part === 'ergo' ? S.data.jarak : null,
+      alarm: info.isAlarm, note: info.isAlarm ? info.why.join(', ') : '',
+    });
+  }
+
+  const ms = performance.now() - t0;
+  S.renders.push(ms);
+  if (S.renders.length > 20) S.renders.shift();
+  S.lastMs = ms;
+  paintStats();
+}
+
+function paintStats() {
+  $('stCounts').textContent = `${S.ok} / ${S.bad}`;
+  $('stLoss').textContent = S.lost;
+  $('stRender').textContent = S.lastMs === undefined ? '-- ms' : `${avg(S.renders).toFixed(2)} ms`;
+  $('stRate').textContent = S.rates.length ? `${(1000 / avg(S.rates)).toFixed(1)} Hz` : '-- Hz';
+  $('stAck').textContent = S.ackMs.length ? `${avg(S.ackMs).toFixed(0)} ms` : '-- ms';
+  const sec = Math.floor((Date.now() - S.startedAt) / 1000);
+  $('stUptime').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+  $('clock').textContent = nowId();
+}
+
+/* ---------- watchdog ---------- */
+function watchdog() {
+  const now = Date.now();
+  for (const part of ['Vital', 'Ergo']) {
+    const last = part === 'Vital' ? S.lastVital : S.lastErgo;
+    const el = $('sig' + part);
+    if (!last) continue;
+    const age = now - last;
+    if (age > 4000) {
+      el.dataset.state = 'err';
+      el.textContent = `${part}: terputus ${(age / 1000).toFixed(0)} s`;
+    }
+  }
+  if (S.lastVital && S.lastErgo && now - Math.max(S.lastVital, S.lastErgo) > 5000 && !S.inAlarm) {
+    $('alertBar').dataset.state = 'warn';
+    $('alertText').textContent = 'Perangkat berhenti mengirim paket. Periksa daya dan cakupan Wi-Fi kedua node.';
+  }
+  paintStats();
+}
+setInterval(watchdog, 1000);
+
+/* ---------- MQTT via Tauri IPC ---------- */
+function setBroker(state, text) {
+  const el = $('sigBroker');
+  el.dataset.state = state;
+  el.dataset.pulse = state === 'ok' ? 'off' : 'on';
+  el.textContent = text;
+}
+
+function paintBrokerStatus(snap) {
+  if (!snap) return;
+  if (snap.base_topic && snap.base_topic !== CFG.base) {
+    CFG.base = snap.base_topic;
+    S.seqVital = null;
+    S.seqErgo = null;
+  }
+  $('chipTopicText').textContent = CFG.base;
+  $('chipTopic').title = `${snap.host}:${snap.port} · ${snap.client_id}`;
+  $('footTopic').textContent = `${CFG.base}/{vital,ergo,cmd,ack}`;
+
+  const map = {
+    connected: ['ok', 'Broker: terhubung'],
+    connecting: ['warn', 'Broker: menghubungkan…'],
+    reconnecting: ['warn', 'Broker: menyambung ulang…'],
+    error: ['err', 'Broker: terputus'],
+  };
+  const [st, txt] = map[snap.state] || ['warn', 'Broker: ' + snap.state];
+  setBroker(st, txt);
+
+  if (!snap.vital_online && S.lastVital) {
+    $('sigVital').dataset.state = 'err';
+    $('sigVital').textContent = 'Vital: terputus';
+  }
+  if (!snap.ergo_online && S.lastErgo) {
+    $('sigErgo').dataset.state = 'err';
+    $('sigErgo').textContent = 'Ergo: terputus';
+  }
+}
+
+$('btnReconnect').addEventListener('click', () => {
+  if (invoke) invoke('reconnect_mqtt').catch(() => {});
+});
+$('btnSettings').addEventListener('click', () => {
+  if (invoke) invoke('open_settings_window').catch(() => {});
+});
+
+/* ---------- command & ack ---------- */
+function onAck(raw) {
+  let o;
+  try { o = JSON.parse(raw); } catch (e) { return; }
+  const cmd = String(o.cmd ?? '?');
+  const ok = o.status === 'ok';
+  const sentAt = S.pending.get(cmd);
+  const ms = sentAt ? Date.now() - sentAt : null;
+  if (sentAt) {
+    S.pending.delete(cmd);
+    if (ms !== null) { S.ackMs.push(ms); if (S.ackMs.length > 20) S.ackMs.shift(); }
+  }
+
+  const li = document.createElement('li');
+  li.className = 'ack-item';
+  li.dataset.ok = ok ? '1' : '0';
+  li.innerHTML = `<span class="ack-cmd">${esc(cmd)}${o.val !== undefined ? ' = ' + esc(o.val) : ''}</span>`
+    + `<span class="ack-ms">${ms === null ? '—' : ms + ' ms'}</span>`
+    + `<span class="ack-t">${nowId()}</span>`;
+  $('ackLog').prepend(li);
+  while ($('ackLog').children.length > 12) $('ackLog').lastElementChild.remove();
+
+  log({
+    time: nowId(), kind: 'ack', seq: null, bpm: null, spo2: null, accel: null, jarak: null,
+    alarm: !ok, note: ok ? `ACK ${cmd}${ms === null ? '' : ' · ' + ms + ' ms'}` : `DITOLAK ${cmd}: ${o.msg || 'perintah tidak valid'}`,
+  });
+  paintStats();
+}
+
+async function sendCmd(cmd, val, label, revertFn) {
+  S.pending.set(cmd, Date.now());
+  log({ time: nowId(), kind: 'cmd', seq: null, bpm: null, spo2: null, accel: null, jarak: null, alarm: false, note: `Kirim ${label}` });
+  if (!invoke) {
+    S.pending.delete(cmd);
+    log({ time: nowId(), kind: 'ack', seq: null, bpm: null, spo2: null, accel: null, jarak: null, alarm: true, note: 'Gagal kirim: API Tauri tidak tersedia' });
+    if (revertFn) revertFn();
+    return false;
+  }
   try {
-    paintStatus(await invoke('get_mqtt_status'));
+    await invoke('publish_cmd', { cmd, val });
+    return true;
+  } catch (err) {
+    S.pending.delete(cmd);
+    log({ time: nowId(), kind: 'ack', seq: null, bpm: null, spo2: null, accel: null, jarak: null, alarm: true, note: 'Gagal kirim: ' + String(err) });
+    if (revertFn) revertFn();
+    return false;
+  }
+}
+
+/* expired pending (tidak ada ACK) */
+setInterval(() => {
+  const now = Date.now();
+  for (const [cmd, at] of S.pending) {
+    if (now - at < CFG.ackWindow) continue;
+    S.pending.delete(cmd);
+    log({ time: nowId(), kind: 'ack', seq: null, bpm: null, spo2: null, accel: null, jarak: null, alarm: true, note: `Tidak ada ACK untuk ${cmd} dalam ${CFG.ackWindow / 1000} s` });
+  }
+}, 1000);
+
+$('swLed').addEventListener('change', e => {
+  const next = e.target.checked;
+  sendCmd('led', next ? 1 : 0, `LED ${next ? 'ON' : 'OFF'}`, () => { e.target.checked = !next; });
+});
+$('swBuzzer').addEventListener('change', e => {
+  const next = e.target.checked;
+  sendCmd('buzzer', next ? 1 : 0, `Buzzer ${next ? 'ON' : 'OFF'}`, () => { e.target.checked = !next; });
+});
+$('btnThr').addEventListener('click', () => {
+  const v = Math.round(clamp(parseInt($('inpThr').value, 10) || 100, 40, 200));
+  $('inpThr').value = v;
+  th.bpmMax = v;
+  saveThresholds();
+  paintThresholds();
+  sendCmd('thr_bpm', v, `ambang BPM ${v}`);
+});
+$('btnRate').addEventListener('click', () => {
+  const v = Math.round(clamp(parseInt($('inpRate').value, 10) || 500, 100, 2000));
+  $('inpRate').value = v;
+  sendCmd('interval', v, `periode ${v} ms`);
+});
+
+/* ---------- log tools ---------- */
+$('btnPause').addEventListener('click', e => {
+  S.paused = !S.paused;
+  e.currentTarget.setAttribute('aria-pressed', S.paused);
+  e.currentTarget.dataset.variant = S.paused ? 'warn' : '';
+  e.currentTarget.querySelector('use').setAttribute('href', S.paused ? '#i-play' : '#i-pause');
+  e.currentTarget.querySelector('span').textContent = S.paused ? 'Lanjut' : 'Jeda';
+  if (!S.paused) renderLog();
+});
+$('selFilter').addEventListener('change', e => { S.filter = e.target.value; renderLog(); });
+$('btnClear').addEventListener('click', () => {
+  if (!LOG.length) return;
+  LOG = [];
+  renderLog();
+});
+$('btnCsv').addEventListener('click', () => {
+  if (!LOG.length) return;
+  const head = 'waktu,jenis,node,seq,bpm,spo2,accel_x,jarak,status';
+  const esc2 = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = LOG.map(r => [r.time, r.kind, r.node ?? '', r.seq ?? '', r.bpm ?? '', r.spo2 ?? '', r.accel ?? '', r.jarak ?? '', r.note || ''].map(esc2).join(','));
+  const blob = new Blob(['\uFEFF' + head + '\r\n' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `smart-ergo-${new Date().toISOString().slice(0, 19).replace(/[:]/g, '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('btnResetStats').addEventListener('click', () => {
+  Object.assign(S, { ok: 0, bad: 0, lost: 0, alarmCount: 0, seqVital: null, seqErgo: null, rates: [], renders: [], ackMs: [], startedAt: Date.now() });
+  $('alertTally').textContent = 'Alarm: 0';
+  paintStats();
+});
+
+/* ---------- self-check parser ---------- */
+console.assert(parsePacket('{"device":"SmartErgo_Vital","bpm":72,"spo2":98}').ok === true, 'valid vital ditolak');
+console.assert(parsePacket('{"device":"SmartErgo_Ergo","accel_x":-0.12,"jarak":42.5}').ok === true, 'valid ergo ditolak');
+console.assert(parsePacket('{"device":"Virtual_Ergo","accel_x":0.1,"jarak":45,"led":1,"buzzer":0}').data.isVirtual === true, 'virtual tidak terdeteksi');
+console.assert(parsePacket('{"device":"SmartErgo_Vital","bpm":"NaN","spo2":98}').ok === false, 'NaN lolos');
+console.assert(parsePacket('{"bpm":72}').ok === false, 'field hilang lolos');
+console.assert(parsePacket('bpm=72').ok === false, 'non-JSON lolos');
+
+/* ---------- init ---------- */
+async function init() {
+  loadThresholds();
+  renderLog();
+  paintStats();
+
+  if (!invoke) {
+    setBroker('err', 'Broker: mode pratinjau');
+    return;
+  }
+
+  try {
+    const snap = await invoke('get_mqtt_status');
+    if (snap.last_vital_raw) {
+      ingest(snap.last_vital_raw, true);
+      if (snap.last_vital_ms) S.lastVital = snap.last_vital_ms;
+    }
+    if (snap.last_ergo_raw) {
+      ingest(snap.last_ergo_raw, true);
+      if (snap.last_ergo_ms) S.lastErgo = snap.last_ergo_ms;
+    }
+    paintBrokerStatus(snap);
   } catch (e) {}
 
   if (listen) {
-    await listen('mqtt-status', (ev) => paintStatus(ev.payload));
+    await listen('mqtt-status', (ev) => paintBrokerStatus(ev.payload));
     await listen('mqtt-message', (ev) => {
-      const k = ev.payload?.kind;
-      if (k === 'vital') $('cntVital').textContent = ++counts.vital;
-      else if (k === 'ergo') $('cntErgo').textContent = ++counts.ergo;
-      else if (k === 'ack') $('cntAck').textContent = ++counts.ack;
+      const m = ev.payload;
+      if (!m) return;
+      if (m.kind === 'ack') onAck(m.payload);
+      else if (m.kind === 'vital' || m.kind === 'ergo') ingest(m.payload, false);
     });
   }
 }
 
-$('btnSettings').addEventListener('click', () => invoke && invoke('open_settings_window'));
-$('btnReconnect').addEventListener('click', () => invoke && invoke('reconnect_mqtt'));
-
 init();
 </script>
+
 </body>
 </html>
