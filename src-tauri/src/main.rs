@@ -3,15 +3,11 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, PhysicalSize, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 const MAIN_WINDOW: &str = "main";
 const SETTINGS_WINDOW: &str = "settings";
-
-/// Fase 1: simpan objek tray supaya tetap hidup selama aplikasi berjalan.
-#[derive(Clone)]
-struct TrayHandle(tauri::tray::TrayIcon);
 
 fn show_window(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
@@ -45,14 +41,15 @@ fn main() {
             show_window(app, MAIN_WINDOW);
         }))
         .setup(|app| {
-            // Dashboard default 1440x900, tetapi jangan melebihi layar monitor.
+            // Dashboard default 1440x900 (logis), tetapi jangan melebihi work area monitor.
             if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
                 if let Ok(Some(mon)) = w.current_monitor() {
-                    let size = mon.size();
-                    if size.width < 1440 || size.height < 900 {
-                        let width = size.width.saturating_sub(48).max(1024);
-                        let height = size.height.saturating_sub(72).max(700);
-                        let _ = w.set_size(PhysicalSize::new(width, height));
+                    let area = mon.work_area().size.to_logical::<u32>(mon.scale_factor());
+                    if area.width < 1440 || area.height < 900 {
+                        let width = area.width.saturating_sub(48).max(1024).min(1440);
+                        let height = area.height.saturating_sub(48).max(700).min(900);
+                        let _ = w.set_size(LogicalSize::new(width, height));
+                        let _ = w.center();
                     }
                 }
             }
@@ -60,7 +57,9 @@ fn main() {
             let open_dashboard = MenuItemBuilder::with_id("open_dashboard", "Buka Dashboard").build(app)?;
             let open_settings = MenuItemBuilder::with_id("open_settings", "Pengaturan").build(app)?;
             let ui_alarm = MenuItemBuilder::with_id("ui_alarm", "Uji Alarm").build(app)?;
-            let status = MenuItemBuilder::with_id("status", "Status: app berjalan").build(app)?;
+            let status = MenuItemBuilder::with_id("status", "Status: app berjalan")
+                .enabled(false)
+                .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Keluar").build(app)?;
 
             let menu = MenuBuilder::new(app)
@@ -82,7 +81,7 @@ fn main() {
                     "open_settings" => open_settings(app),
                     "ui_alarm" => {
                         let _ = app.tray_by_id("main").map(|t| {
-                            let _ = t.set_tooltip(Some("Uji Alarm aktif di rilis berikutnya".into()));
+                            let _ = t.set_tooltip(Some("Uji Alarm aktif di rilis berikutnya"));
                         });
                     }
                     "quit" => app.exit(0),
@@ -100,7 +99,7 @@ fn main() {
                 })
                 .build(app)?;
 
-            app.manage(TrayHandle(tray));
+            app.manage(tray);
 
             Ok(())
         })
