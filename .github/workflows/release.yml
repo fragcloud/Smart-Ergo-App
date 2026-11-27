@@ -50,11 +50,12 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
             checksums.txt
           body: |
-            ## Smart Ergo 0.3.1 — Perbaikan window Pengaturan & ikon SVG
+            ## Smart Ergo 0.4.0 — Fase 4 (pop-up alarm & notifikasi Windows)
 
-            - Pre-create window Pengaturan (`visible: false`) + hide-on-close untuk mencegah deadlock WebView2 (layar putih & tombol X macet) di Windows
-            - Perbaiki rendering ikon SVG pada kartu sensor, chip topik, dan panel kendali
-            - Seluruh fitur Fase 3 (dashboard offline-safe, backend MQTT Rust, deteksi perangkat virtual)
+            - Pop-up alarm frameless always-on-top (`alarm.html`) tanpa title bar dan tanpa tombol `X`
+            - `ack_alarm` optimistis: klik **Matikan Alarm** langsung menutup pop-up dan mengirim perintah ke MCU (atau langsung menutup tanpa retry bila MCU offline)
+            - Cooldown episode 3 detik di backend agar pop-up muncul kembali bila MCU melewatkan ACK
+            - Menu tray **Uji Alarm** aktif dan notifikasi toast Windows per episode alarm
 
             **Integritas:** installer unsigned (normal untuk proyek akademik).
             Verifikasi file dengan hash SHA-256 pada `checksums.txt`.

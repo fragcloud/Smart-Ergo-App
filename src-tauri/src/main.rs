@@ -4,7 +4,7 @@ mod config;
 mod mqtt;
 
 use config::AppConfig;
-use mqtt::{MqttManager, MqttStatusSnapshot, TrayUi};
+use mqtt::{AlarmPayload, MqttManager, MqttStatusSnapshot, TrayUi};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -13,6 +13,7 @@ use tauri::{
 
 const MAIN_WINDOW: &str = "main";
 const SETTINGS_WINDOW: &str = "settings";
+const ALARM_WINDOW: &str = "alarm";
 
 struct AppState {
     mqtt: MqttManager,
@@ -97,6 +98,16 @@ async fn publish_cmd(
 }
 
 #[tauri::command]
+async fn get_alarm_state(state: State<'_, AppState>) -> Result<AlarmPayload, String> {
+    Ok(state.mqtt.get_alarm_state().await)
+}
+
+#[tauri::command]
+async fn ack_alarm(app: AppHandle, state: State<'_, AppState>) -> Result<bool, String> {
+    state.mqtt.ack_alarm(&app).await
+}
+
+#[tauri::command]
 async fn open_settings_window(app: AppHandle) {
     open_settings(&app);
 }
@@ -106,6 +117,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_window(app, MAIN_WINDOW);
         }))
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
@@ -113,6 +125,8 @@ fn main() {
             get_mqtt_status,
             reconnect_mqtt,
             publish_cmd,
+            get_alarm_state,
+            ack_alarm,
             open_settings_window,
         ])
         .setup(|app| {
@@ -155,8 +169,10 @@ fn main() {
                     "open_dashboard" => show_window(app, MAIN_WINDOW),
                     "open_settings" => open_settings(app),
                     "ui_alarm" => {
-                        let _ = app.tray_by_id("main").map(|t| {
-                            let _ = t.set_tooltip(Some("Uji Alarm aktif di Fase 4"));
+                        let handle = app.clone();
+                        let mgr = app.state::<AppState>().mqtt.clone();
+                        tauri::async_runtime::spawn(async move {
+                            mgr.trigger_test_alarm(&handle).await;
                         });
                     }
                     "quit" => app.exit(0),
@@ -191,11 +207,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Menutup dashboard atau pengaturan = menyembunyikan window, bukan berhenti.
+            // Menutup dashboard/pengaturan = sembunyikan; alarm hanya ditutup lewat tombol ACK.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if matches!(window.label(), MAIN_WINDOW | SETTINGS_WINDOW) {
                     api.prevent_close();
                     let _ = window.hide();
+                } else if window.label() == ALARM_WINDOW {
+                    api.prevent_close();
                 }
             }
         })

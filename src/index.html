@@ -619,7 +619,7 @@ footer.exec code{font-family:var(--mono)}
 </main>
 
 <footer class="exec">
-  <span>Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS · v0.3.1</span>
+  <span>Kelompok 2 · Workshop Mikrokontroler Lanjut · PENS · v0.4.0</span>
   <span>Topik <code id="footTopic">pens/uC2/smartergo/{vital,ergo,cmd,ack}</code> · QoS 0</span>
 </footer>
 
@@ -1288,6 +1288,12 @@ async function init() {
 
   if (listen) {
     await listen('mqtt-status', (ev) => paintBrokerStatus(ev.payload));
+    await listen('mqtt-cmd-sent', (ev) => {
+      const c = ev.payload?.cmd;
+      if (!c) return;
+      S.pending.set(c, Date.now());
+      log({ time: nowId(), kind: 'cmd', seq: null, bpm: null, spo2: null, accel: null, jarak: null, alarm: false, note: `Kirim ${c}` });
+    });
     await listen('mqtt-message', (ev) => {
       const m = ev.payload;
       if (!m) return;

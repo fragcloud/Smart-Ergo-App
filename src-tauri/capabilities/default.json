@@ -2,8 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Izin dasar aplikasi Smart Ergo",
-  "windows": ["main", "settings"],
+  "windows": ["main", "settings", "alarm"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "notification:default"
   ]
 }

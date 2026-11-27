@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Alarm Smart Ergo</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<style>
+  :root {
+    --bg: #160b0c;
+    --panel: #221113;
+    --line: #5c2629;
+    --text: #fdecec;
+    --muted: #d4a3a6;
+    --alarm: #ff7b72;
+    --warn: #f2b544;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    user-select: none;
+  }
+  .frame {
+    height: 100%;
+    padding: 22px;
+    border: 2px solid var(--alarm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    background: radial-gradient(circle at top right, rgba(255, 123, 114, .16), transparent 60%), var(--bg);
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: 700 11px var(--mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 123, 114, .16);
+    border: 1px solid rgba(255, 123, 114, .5);
+    color: var(--alarm);
+  }
+  .badge::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--alarm);
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  .badge[data-test="1"] {
+    color: var(--warn);
+    border-color: rgba(242, 181, 68, .5);
+    background: rgba(242, 181, 68, .14);
+  }
+  .badge[data-test="1"]::before { background: var(--warn); }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.75); } }
+
+  .dev {
+    font: 500 11px var(--mono);
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .reason {
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .metric-k {
+    font: 600 10.5px var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .metric-v {
+    font: 600 18px var(--mono);
+    color: var(--text);
+  }
+  .offline-note {
+    display: none;
+    font-size: 12px;
+    color: var(--warn);
+    background: rgba(242, 181, 68, .12);
+    border: 1px solid rgba(242, 181, 68, .35);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .offline-note.show { display: block; }
+  .btn-ack {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid rgba(255, 123, 114, .7);
+    border-radius: 10px;
+    background: var(--alarm);
+    color: #240809;
+    font: 700 14.5px var(--font);
+    cursor: pointer;
+    transition: filter .15s, transform .08s;
+  }
+  .btn-ack:hover { filter: brightness(1.08); }
+  .btn-ack:active { transform: scale(.99); }
+  .btn-ack:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .btn-ack[data-offline="1"] {
+    background: var(--panel);
+    color: var(--text);
+    border-color: var(--line);
+  }
+</style>
+</head>
+<body>
+  <main class="frame">
+    <div>
+      <div class="top">
+        <span class="badge" id="badge" data-test="0">Alarm Ergonomi</span>
+        <span class="dev" id="devName">Node Ergo</span>
+      </div>
+      <h1 id="title">Postur / Jarak Tidak Aman</h1>
+      <p class="reason" id="reasonText">Parameter ergonomi melewati ambang batas.</p>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-k">Jarak pandang</div>
+        <div class="metric-v" id="valJarak">-- cm</div>
+      </div>
+      <div class="metric">
+        <div class="metric-k">Kemiringan X</div>
+        <div class="metric-v" id="valAccel">-- m/s²</div>
+      </div>
+    </div>
+
+    <p class="offline-note" id="offlineNote">
+      Node Ergo sedang offline — klik tombol di bawah untuk menutup pop-up.
+    </p>
+
+    <button type="button" class="btn-ack" id="btnAck" data-offline="0">Matikan Alarm</button>
+  </main>
+
+<script>
+'use strict';
+
+const tauri = window.__TAURI__;
+const invoke = tauri?.core?.invoke;
+const listen = tauri?.event?.listen;
+const $ = (id) => document.getElementById(id);
+
+function paint(st) {
+  if (!st) return;
+  const isTest = !!st.is_test;
+  const online = !!st.ergo_online && !!st.broker_connected;
+
+  $('badge').dataset.test = isTest ? '1' : '0';
+  $('badge').textContent = isTest ? 'Uji Alarm' : 'Alarm Ergonomi';
+  $('devName').textContent = st.device || 'Node Ergo';
+  $('title').textContent = isTest ? 'Uji Pop-up Alarm' : 'Postur / Jarak Tidak Aman';
+  $('reasonText').textContent = st.reason || 'Parameter ergonomi melewati ambang batas.';
+
+  $('valJarak').textContent = (typeof st.jarak === 'number' && Number.isFinite(st.jarak))
+    ? st.jarak.toFixed(1) + ' cm' : 'N/A';
+  $('valAccel').textContent = (typeof st.accel_x === 'number' && Number.isFinite(st.accel_x))
+    ? st.accel_x.toFixed(2) + ' m/s²' : '-- m/s²';
+
+  const showOffline = !isTest && !online;
+  $('offlineNote').classList.toggle('show', showOffline);
+  $('btnAck').dataset.offline = showOffline ? '1' : '0';
+  $('btnAck').textContent = isTest ? 'Tutup Uji Alarm'
+    : showOffline ? 'Tutup (MCU Offline)' : 'Matikan Alarm';
+
+  $('btnAck').focus();
+}
+
+$('btnAck').addEventListener('click', () => {
+  if (invoke) invoke('ack_alarm').catch(() => {});
+});
+
+async function init() {
+  if (!invoke) return;
+  try {
+    paint(await invoke('get_alarm_state'));
+  } catch (e) {}
+  if (listen) {
+    await listen('alarm-state', (ev) => paint(ev.payload));
+  }
+}
+
+init();
+</script>
+</body>
+</html>
