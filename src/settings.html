@@ -212,11 +212,8 @@ function setBusy(busy) {
   $('btnReset').disabled = busy;
 }
 
-async function init() {
-  if (!invoke) {
-    showMsg('err', 'API Tauri tidak tersedia di konteks ini.');
-    return;
-  }
+async function refreshData() {
+  if (!invoke) return;
   try {
     const [cfg, snap] = await Promise.all([
       invoke('get_config'),
@@ -227,9 +224,21 @@ async function init() {
   } catch (e) {
     showMsg('err', String(e));
   }
+}
+
+async function init() {
+  if (!invoke) {
+    showMsg('err', 'API Tauri tidak tersedia di konteks ini.');
+    return;
+  }
+  await refreshData();
 
   if (listen) {
     await listen('mqtt-status', (ev) => paintStatus(ev.payload));
+    await listen('settings-refresh', async () => {
+      $('msgBox').classList.remove('show');
+      await refreshData();
+    });
   }
 }
 

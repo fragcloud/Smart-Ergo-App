@@ -8,7 +8,7 @@ use mqtt::{MqttManager, MqttStatusSnapshot, TrayUi};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 const MAIN_WINDOW: &str = "main";
@@ -28,19 +28,29 @@ fn show_window(app: &AppHandle, label: &str) {
 }
 
 fn open_settings(app: &AppHandle) {
-    if app.get_webview_window(SETTINGS_WINDOW).is_some() {
+    if let Some(w) = app.get_webview_window(SETTINGS_WINDOW) {
         show_window(app, SETTINGS_WINDOW);
+        let _ = w.emit("settings-refresh", ());
         return;
     }
-    let win = WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App("settings.html".into()))
+    // Fallback bila window belum ada: bangun di thread terpisah agar tidak deadlock WebView2.
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        let win = WebviewWindowBuilder::new(
+            &handle,
+            SETTINGS_WINDOW,
+            WebviewUrl::App("settings.html".into()),
+        )
         .title("Pengaturan Smart Ergo")
         .inner_size(520.0, 620.0)
         .min_inner_size(480.0, 540.0)
         .resizable(true)
+        .center()
         .build();
-    if let Err(e) = win {
-        eprintln!("gagal membuat window pengaturan: {e}");
-    }
+        if let Err(e) = win {
+            eprintln!("gagal membuat window pengaturan: {e}");
+        }
+    });
 }
 
 #[tauri::command]
@@ -87,7 +97,7 @@ async fn publish_cmd(
 }
 
 #[tauri::command]
-fn open_settings_window(app: AppHandle) {
+async fn open_settings_window(app: AppHandle) {
     open_settings(&app);
 }
 
@@ -181,9 +191,9 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Menutup dashboard = menyembunyikan window, bukan berhenti.
+            // Menutup dashboard atau pengaturan = menyembunyikan window, bukan berhenti.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == MAIN_WINDOW {
+                if matches!(window.label(), MAIN_WINDOW | SETTINGS_WINDOW) {
                     api.prevent_close();
                     let _ = window.hide();
                 }
